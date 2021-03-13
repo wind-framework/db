@@ -213,6 +213,7 @@ class Connection
 
             while (yield $result->advance()) {
                 $row = $result->getCurrent();
+                is_int($col) && $row = array_values($row);
                 if ($this->indexBy) {
                     $cols[$row[$this->indexBy]] = $row[$col];
                 } else {

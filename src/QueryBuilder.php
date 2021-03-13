@@ -757,6 +757,7 @@ class QueryBuilder {
 	public function scalar($col=0)
 	{
 	    $sql = $this->buildSelect();
+
 		return call(function() use ($sql, $col) {
 			$row = yield $this->connection->fetchOne($sql);
 
@@ -764,9 +765,7 @@ class QueryBuilder {
 			    return null;
             }
 
-            if (is_int($col)) {
-                $row = array_values($row);
-            }
+            is_int($col) && $row = array_values($row);
 
             return $row[$col] ?? null;
 		});
