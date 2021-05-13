@@ -2,9 +2,9 @@
     "name": "wind-framework/db",
     "description": "Wind framework coroutine database component.",
     "type": "library",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "require": {
-        "wind-framework/wind-framework": "^0.1",
+        "wind-framework/wind-framework": "~0.1",
         "amphp/mysql": "^2.1"
     },
     "license": "Apache-2.0",
