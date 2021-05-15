@@ -1,17 +1,21 @@
 <?php
 /**
- * Created by PhpStorm.
- * User: Pader
- * Date: 2017/5/3
- * Time: 22:28
+ * Wind Framework QueryBuilder
+ * 
+ * @author Pader <ypnow@163.com>
  */
-
 namespace Wind\Db;
 
-use Amp\Mysql\CommandResult;
 use Amp\Promise;
 use function Amp\call;
 
+/**
+ * QueryBuilder
+ * 
+ * @method Promise<array> fetchColumn(int|string $col=0) Fetch column from all rows
+ * @method Promise<array> fetchAll() Fetch all rows from query result
+ * @method Promise<array>|Promise<null> fetchOne() Fetch first row from query result
+ */
 class QueryBuilder {
 
     protected $connection;
@@ -146,6 +150,17 @@ class QueryBuilder {
 	public function offset($num)
 	{
 		$this->builder['offset'] = $num;
+		return $this;
+	}
+
+	/**
+	 * Set fetchAll, fetchColumn result array index
+	 * 
+	 * @param string $key
+	 * @return static
+	 */
+	public function indexBy($key) {
+		$this->builder['index_by'] = $key;
 		return $this;
 	}
 
@@ -698,28 +713,20 @@ class QueryBuilder {
 		});
 	}
 
-	/**
-	 * Fetch first row from query result
-	 * @return Promise<array>|Promise<null>
-	 */
-	public function fetchOne()
+	public function __call($name, $arguments)
 	{
-		return $this->connection->fetchOne($this->buildSelect());
-	}
+		if (substr($name, 0, 5) == 'fetch') {
+			if (isset($this->builder['index_by'])) {
+				$this->connection->indexBy($this->builder['index_by']);
+			}
+			
+			array_unshift($arguments, []);
+			array_unshift($arguments, $this->buildSelect());
 
-	/**
-	 * Fetch all rows from query result
-	 * @return Promise<array>|Promise<null>
-	 */
-	public function fetchAll()
-	{
-		return $this->connection->fetchAll($this->buildSelect());
-	}
-
-	//Fetch column from all rows
-	public function fetchColumn($col=0)
-	{
-		return $this->connection->fetchColumn($this->buildSelect(), [], $col);
+			return call_user_func_array([$this->connection, $name], $arguments);
+		} else {
+			throw new \ErrorException("Call to undefined method \Wind\Db\QueryBuilder::{$name}()");
+		}
 	}
 
 	//public function distinct($field)
