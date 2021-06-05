@@ -7,6 +7,7 @@ use Amp\Promise;
 use Amp\Sql\Common\ConnectionPool;
 use Amp\Sql\ConnectionException;
 use Amp\Sql\FailureException;
+use Amp\Sql\QueryError as SqlQueryError;
 use Wind\Base\Config;
 use Wind\Db\Event\QueryError;
 use Wind\Db\Event\QueryEvent;
@@ -101,9 +102,9 @@ class Connection
                 } else {
                     return yield $this->pool->query($sql);
                 }
-            } catch (ConnectionException|FailureException $e) {
+            } catch (ConnectionException|FailureException|SqlQueryError $e) {
                 $eventDispatcher->dispatch(new QueryError($sql, $e));
-                throw new QueryException($e->getMessage(), $e->getCode(), $e, $sql);
+                throw new QueryException($e->getMessage(), $e->getCode(), $sql);
             }
         });
 	}
@@ -123,9 +124,9 @@ class Connection
 	    return call(function() use ($sql, $params, $eventDispatcher) {
 	        try {
                 return yield $this->pool->execute($sql, $params);
-            } catch (ConnectionException|FailureException $e) {
+            } catch (ConnectionException|FailureException|SqlQueryError $e) {
                 $eventDispatcher->dispatch(new QueryError($sql, $e));
-                throw new QueryException($e->getMessage(), $e->getCode(), $e, $sql);
+                throw new QueryException($e->getMessage(), $e->getCode(), $sql);
             }
         });
 

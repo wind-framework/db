@@ -649,16 +649,72 @@ class QueryBuilder {
 	 * Insert data
 	 *
 	 * @param array $data
-	 * @param bool $replace Use REPLACE INTO
 	 * @return Promise<int> Last insert id
 	 * @throws
 	 */
-	public function insert(array $data, $replace=false): Promise
+	public function insert(array $data): Promise
+	{
+		return $this->insertCommand($data);
+	}
+
+	/**
+	 * Insert data or ignore on duplicate key
+	 * 
+	 * @param array $data
+	 * @return Promise<int> Last insert id, return 0 if ignored.
+	 * @throws
+	 */
+	public function insertIgnore(array $data)
+	{
+		return $this->insertCommand($data, 'INSERT', 'IGNORE');
+	}
+
+	/**
+	 * Insert data or on duplicate key update
+	 *
+	 * @param array $data
+	 * @param array $update Update key values on duplicate key
+	 * @return Promise<int> Last insert or updated id, return 0 if no changed.
+	 * @throws
+	 */
+	public function insertOrUpdate(array $data, array $update)
+	{
+		$after = 'ON DUPLICATE KEY UPDATE '.$this->buildSets($update);
+		return $this->insertCommand($data, 'INSERT', 'INTO', $after);
+	}
+
+	/**
+	 * Replace into data
+	 *
+	 * @param array $data
+	 * @return Promise<int> Last insert id
+	 * @throws
+	 */
+	public function replace(array $data)
+	{
+		return $this->insertCommand($data, 'REPLACE');
+	}
+
+	/**
+	 * Insert command
+	 *
+	 * @param array $data
+	 * @param string $cmd Insert command, INSERT or REPLACE
+	 * @param string $mode Insert mode, INTO or IGNORE
+	 * @param string $after Append sql
+	 * @return Promise<int> Last insert id
+	 * @throws
+	 */
+	private function insertCommand(array $data, $cmd='INSERT', $mode='INTO', $after=null)
 	{
 		$keys = $this->quoteKeys(array_keys($data));
 		$values = $this->quoteValues($data);
 
-		$sql = ($replace ? 'REPLACE' : 'INSERT')." INTO {$this->table}($keys) VALUES($values)";
+		$sql = "$cmd $mode {$this->table}($keys) VALUES($values)";
+
+		if ($after !== null) {
+			$sql .= ' '.$after;
+		}
 
 		return call(function() use ($sql) {
 			$result = yield $this->connection->execute($sql);
@@ -690,7 +746,29 @@ class QueryBuilder {
 	 */
 	public function update(array $data): Promise
 	{
-		$sql = 'UPDATE '.$this->table.' SET ';
+		$sql = 'UPDATE '.$this->table.' SET '
+			.$this->buildSets($data)
+			.$this->buildWhere()
+			.$this->buildOrderBy()
+			.$this->buildLimit()
+			.$this->buildOffset();
+
+		$this->builder = [];
+
+		return call(function() use ($sql) {
+			$result = yield $this->connection->execute($sql);
+			return $result->getAffectedRowCount();
+		});
+	}
+
+	/**
+	 * Build SET section
+	 *
+	 * @param array $data
+	 * @return string
+	 */
+	private function buildSets(array $data)
+	{
 		$sets = [];
 
 		foreach($data as $key => $val) {
@@ -702,15 +780,7 @@ class QueryBuilder {
 			}
 		}
 
-		$sql .= join(',', $sets).$this->buildWhere().$this->buildOrderBy() .$this->buildLimit()
-			.$this->buildOffset();
-
-		$this->builder = [];
-
-		return call(function() use ($sql) {
-			$result = yield $this->connection->execute($sql);
-			return $result->getAffectedRowCount();
-		});
+		return join(',', $sets);
 	}
 
 	public function __call($name, $arguments)
