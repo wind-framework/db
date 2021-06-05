@@ -23,7 +23,7 @@ class QueryError extends \Wind\Event\Event
 
     public function __toString()
     {
-        return $this->sql."\n".$this->exception->__toString();
+        return $this->sql."\r\n".fmtException($this->exception, config('max_stack_trace', 5));
     }
 
 }
