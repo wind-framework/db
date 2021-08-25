@@ -1,7 +1,7 @@
 <?php
 /**
  * Wind Framework QueryBuilder
- * 
+ *
  * @author Pader <ypnow@163.com>
  */
 namespace Wind\Db;
@@ -11,7 +11,7 @@ use function Amp\call;
 
 /**
  * QueryBuilder
- * 
+ *
  * @method Promise<array> fetchColumn(int|string $col=0) Fetch column from all rows
  * @method Promise<array> fetchAll() Fetch all rows from query result
  * @method Promise<array>|Promise<null> fetchOne() Fetch first row from query result
@@ -46,17 +46,17 @@ class QueryBuilder {
 		return $this;
 	}
 
-	public function join($table, $compopr, $type='')
+	public function join($table, $compopr, $type='', $alias=null)
 	{
 		$type = strtoupper($type);
-		$this->builder['join'][] = compact('type', 'table', 'compopr');
+		$this->builder['join'][] = compact('type', 'table', 'compopr', 'alias');
 		return $this;
 	}
 
-	public function leftJoin($table, $compopr) { return $this->join($table, $compopr, 'left'); }
-	public function rightJoin($table, $compopr) { return $this->join($table, $compopr, 'right'); }
-	public function innerJoin($table, $compopr) { return $this->join($table, $compopr, 'inner'); }
-	public function outerJoin($table, $compopr) { return $this->join($table, $compopr, 'outer'); }
+	public function leftJoin($table, $compopr, $alias=null) { return $this->join($table, $compopr, 'left', $alias); }
+	public function rightJoin($table, $compopr, $alias=null) { return $this->join($table, $compopr, 'right', $alias); }
+	public function innerJoin($table, $compopr, $alias=null) { return $this->join($table, $compopr, 'inner', $alias); }
+	public function outerJoin($table, $compopr, $alias=null) { return $this->join($table, $compopr, 'outer', $alias); }
 
 	public function union($all=false)
 	{
@@ -155,7 +155,7 @@ class QueryBuilder {
 
 	/**
 	 * Set fetchAll, fetchColumn result array index
-	 * 
+	 *
 	 * @param string $key
 	 * @return static
 	 */
@@ -228,7 +228,7 @@ class QueryBuilder {
 		if (isset($this->builder['join'])) {
 			$sql = '';
 			foreach ($this->builder['join'] as $join) {
-				$sql .= ' '.$join['type'].' JOIN '.$this->quoteTable($join['table']);
+				$sql .= ' '.$join['type'].' JOIN '.$this->quoteTable($this->builder['alias'] ? $join['table'].' '.$join['alias'] : $join['table']);
 				//only a field mean USING()
 				if (is_string($join['compopr']) && preg_match('/^[^\(\)\=]+$/', $join['compopr'])) {
 					$sql .= ' USING('.$this->quoteKeys($join['compopr'], true).')';
@@ -659,7 +659,7 @@ class QueryBuilder {
 
 	/**
 	 * Insert data or ignore on duplicate key
-	 * 
+	 *
 	 * @param array $data
 	 * @return Promise<int> Last insert id, return 0 if ignored.
 	 * @throws
@@ -789,7 +789,7 @@ class QueryBuilder {
 			if (isset($this->builder['index_by'])) {
 				$this->connection->indexBy($this->builder['index_by']);
 			}
-			
+
 			array_unshift($arguments, []);
 			array_unshift($arguments, $this->buildSelect());
 
