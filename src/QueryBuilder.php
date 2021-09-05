@@ -6,15 +6,12 @@
  */
 namespace Wind\Db;
 
-use Amp\Promise;
-use function Amp\call;
-
 /**
  * QueryBuilder
  *
- * @method Promise<array> fetchColumn(int|string $col=0) Fetch column from all rows
- * @method Promise<array> fetchAll() Fetch all rows from query result
- * @method Promise<array>|Promise<null> fetchOne() Fetch first row from query result
+ * @method array fetchColumn(int|string $col=0) Fetch column from all rows
+ * @method array fetchAll() Fetch all rows from query result
+ * @method array|null fetchOne() Fetch first row from query result
  */
 class QueryBuilder {
 
@@ -649,10 +646,10 @@ class QueryBuilder {
 	 * Insert data
 	 *
 	 * @param array $data
-	 * @return Promise<int> Last insert id
+	 * @return int Last insert id
 	 * @throws
 	 */
-	public function insert(array $data): Promise
+	public function insert(array $data)
 	{
 		return $this->insertCommand($data);
 	}
@@ -661,7 +658,7 @@ class QueryBuilder {
 	 * Insert data or ignore on duplicate key
 	 *
 	 * @param array $data
-	 * @return Promise<int> Last insert id, return 0 if ignored.
+	 * @return int Last insert id, return 0 if ignored.
 	 * @throws
 	 */
 	public function insertIgnore(array $data)
@@ -674,7 +671,7 @@ class QueryBuilder {
 	 *
 	 * @param array $data
 	 * @param array $update Update key values on duplicate key
-	 * @return Promise<int> Last insert or updated id, return 0 if no changed.
+	 * @return int Last insert or updated id, return 0 if no changed.
 	 * @throws
 	 */
 	public function insertOrUpdate(array $data, array $update)
@@ -687,7 +684,7 @@ class QueryBuilder {
 	 * Replace into data
 	 *
 	 * @param array $data
-	 * @return Promise<int> Last insert id
+	 * @return int Last insert id
 	 * @throws
 	 */
 	public function replace(array $data)
@@ -702,7 +699,7 @@ class QueryBuilder {
 	 * @param string $cmd Insert command, INSERT or REPLACE
 	 * @param string $mode Insert mode, INTO or IGNORE
 	 * @param string $after Append sql
-	 * @return Promise<int> Last insert id
+	 * @return int Last insert id
 	 * @throws
 	 */
 	private function insertCommand(array $data, $cmd='INSERT', $mode='INTO', $after=null)
@@ -716,35 +713,31 @@ class QueryBuilder {
 			$sql .= ' '.$after;
 		}
 
-		return call(function() use ($sql) {
-			$result = yield $this->connection->execute($sql);
-			return $result->getLastInsertId();
-		});
+        $result = $this->connection->execute($sql);
+        return $result->getLastInsertId();
 	}
 
 	/**
 	 * Delete data
 	 *
-	 * @return Promise<int> Affected row count
+	 * @return int Affected row count
 	 */
-	public function delete(): Promise
+	public function delete()
 	{
-		return call(function() {
-			$sql = 'DELETE'.$this->buildFrom().$this->buildWhere().$this->buildOrderBy()
-				.$this->buildLimit().$this->buildOffset();
-			$this->builder = [];
-			$result = yield $this->connection->execute($sql);
-			return $result->getAffectedRowCount();
-		});
+        $sql = 'DELETE'.$this->buildFrom().$this->buildWhere().$this->buildOrderBy()
+            .$this->buildLimit().$this->buildOffset();
+        $this->builder = [];
+        $result = $this->connection->execute($sql);
+        return $result->getRowCount();
 	}
 
 	/**
 	 * Update data
 	 *
 	 * @param array $data
-	 * @return Promise<int> Affected row count
+	 * @return int Affected row count
 	 */
-	public function update(array $data): Promise
+	public function update(array $data): int
 	{
 		$sql = 'UPDATE '.$this->table.' SET '
 			.$this->buildSets($data)
@@ -755,10 +748,8 @@ class QueryBuilder {
 
 		$this->builder = [];
 
-		return call(function() use ($sql) {
-			$result = yield $this->connection->execute($sql);
-			return $result->getAffectedRowCount();
-		});
+        $result = $this->connection->execute($sql);
+        return $result->getRowCount();
 	}
 
 	/**
@@ -835,17 +826,15 @@ class QueryBuilder {
 	{
 	    $sql = $this->buildSelect();
 
-		return call(function() use ($sql, $col) {
-			$row = yield $this->connection->fetchOne($sql);
+        $row = $this->connection->fetchOne($sql);
 
-			if ($row === null) {
-			    return null;
-            }
+        if ($row === null) {
+            return null;
+        }
 
-            is_int($col) && $row = array_values($row);
+        is_int($col) && $row = array_values($row);
 
-            return $row[$col] ?? null;
-		});
+        return $row[$col] ?? null;
 	}
 
     private function popTempBuilder()

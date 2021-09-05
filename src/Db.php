@@ -2,7 +2,7 @@
 
 namespace Wind\Db;
 
-use Amp\Promise;
+use Amp\Mysql\Result;
 
 class Db
 {
@@ -28,11 +28,11 @@ class Db
     /**
      * @param string $sql
      * @param array $params
-     * @return Promise
+     * @return Result
      * @throws \Amp\Sql\ConnectionException
      * @throws \Amp\Sql\FailureException
      */
-    public static function query(string $sql, array $params=[]): Promise
+    public static function query(string $sql, array $params=[]): Result
     {
         return self::connection()->query($sql, $params);
     }
@@ -40,11 +40,11 @@ class Db
     /**
      * @param string $sql
      * @param array $params
-     * @return Promise
+     * @return Result
      * @throws \Amp\Sql\ConnectionException
      * @throws \Amp\Sql\FailureException
      */
-    public static function execute(string $sql, array $params = []): Promise
+    public static function execute(string $sql, array $params = []): Result
     {
         return self::connection()->execute($sql, $params);
     }
@@ -54,9 +54,9 @@ class Db
      *
      * @param string $sql
      * @param array $params
-     * @return Promise<\Amp\Mysql\ResultSet>
+     * @return array|null
      */
-    public static function fetchOne($sql, array $params=[]): Promise {
+    public static function fetchOne($sql, array $params=[]): ?array {
         return self::connection()->fetchOne($sql, $params);
     }
 
@@ -65,9 +65,9 @@ class Db
      *
      * @param string $sql
      * @param array $params
-     * @return Promise<\Amp\Mysql\ResultSet>
+     * @return array
      */
-    public static function fetchAll($sql, array $params=[]): Promise {
+    public static function fetchAll($sql, array $params=[]): array {
         return self::connection()->fetchAll($sql, $params);
     }
 

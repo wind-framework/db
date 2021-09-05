@@ -3,16 +3,16 @@
 namespace Wind\Db;
 
 use Amp\Mysql\ConnectionConfig;
-use Amp\Promise;
+use Amp\Mysql\Result;
 use Amp\Sql\Common\ConnectionPool;
 use Amp\Sql\ConnectionException;
 use Amp\Sql\FailureException;
 use Amp\Sql\QueryError as SqlQueryError;
+use Psr\EventDispatcher\EventDispatcherInterface;
 use Wind\Base\Config;
 use Wind\Db\Event\QueryError;
 use Wind\Db\Event\QueryEvent;
-use Psr\EventDispatcher\EventDispatcherInterface;
-use function Amp\call;
+
 use function Amp\Mysql\pool;
 
 /**
@@ -85,51 +85,46 @@ class Connection
     /**
      * @param string $sql
      * @param array $params
-     * @return Promise<\Amp\Mysql\ResultSet>
+     * @return Result
      * @throws QueryException
      * @throws \Amp\Sql\QueryError
      */
-	public function query(string $sql, array $params=[]): Promise
+	public function query(string $sql, array $params=[]): Result
 	{
 	    $eventDispatcher = di()->get(EventDispatcherInterface::class);
         $eventDispatcher->dispatch(new QueryEvent($sql));
 
-        return call(function() use ($sql, $params, $eventDispatcher) {
-            try {
-                if ($params) {
-                    $statement = yield $this->pool->prepare($sql);
-                    return yield $statement->execute($params);
-                } else {
-                    return yield $this->pool->query($sql);
-                }
-            } catch (ConnectionException|FailureException|SqlQueryError $e) {
-                $eventDispatcher->dispatch(new QueryError($sql, $e));
-                throw new QueryException($e->getMessage(), $e->getCode(), $sql);
+        try {
+            if ($params) {
+                $statement = $this->pool->prepare($sql);
+                return $statement->execute($params);
+            } else {
+                return $this->pool->query($sql);
             }
-        });
+        } catch (ConnectionException|FailureException|SqlQueryError $e) {
+            $eventDispatcher->dispatch(new QueryError($sql, $e));
+            throw new QueryException($e->getMessage(), $e->getCode(), $sql);
+        }
 	}
 
 	/**
 	 * @param string $sql
 	 * @param array $params
-	 * @return Promise<\Amp\Mysql\CommandResult>
+	 * @return \Amp\Mysql\Result
 	 * @throws QueryException
      * @throws \Amp\Sql\QueryError
 	 */
-	public function execute(string $sql, array $params = []): Promise
+	public function execute(string $sql, array $params = []): Result
 	{
         $eventDispatcher = di()->get(EventDispatcherInterface::class);
         $eventDispatcher->dispatch(new QueryEvent($sql));
 
-	    return call(function() use ($sql, $params, $eventDispatcher) {
-	        try {
-                return yield $this->pool->execute($sql, $params);
-            } catch (ConnectionException|FailureException|SqlQueryError $e) {
-                $eventDispatcher->dispatch(new QueryError($sql, $e));
-                throw new QueryException($e->getMessage(), $e->getCode(), $sql);
-            }
-        });
-
+        try {
+            return $this->pool->execute($sql, $params);
+        } catch (ConnectionException|FailureException|SqlQueryError $e) {
+            $eventDispatcher->dispatch(new QueryError($sql, $e));
+            throw new QueryException($e->getMessage(), $e->getCode(), $sql);
+        }
 	}
 
 	/**
@@ -137,23 +132,14 @@ class Connection
 	 *
 	 * @param string $sql
 	 * @param array $params
-	 * @return Promise<array>
+	 * @return array|null
 	 */
-	public function fetchOne($sql, array $params=[]): Promise {
-		return call(function() use ($sql, $params) {
-			$result = yield $this->query($sql, $params);
-
-			if (yield $result->advance()) {
-				$row = $result->getCurrent();
-				//必须持续调用 nextResultSet 或 advance 直到无数据为止
-				//防止资源未释放时后面的查询建立新连接的问题
-				//如果查询出的数据行数大于一条，则仍然可能出现此问题
-				yield $result->nextResultSet();
-				return $row;
-			} else {
-				return null;
-			}
-		});
+	public function fetchOne($sql, array $params=[]): ?array {
+        $result = $this->query($sql, $params);
+        foreach ($result as $row) {
+            return $row;
+        }
+        return null;
 	}
 
 	/**
@@ -161,30 +147,27 @@ class Connection
 	 *
 	 * @param string $sql
 	 * @param array $params
-	 * @return Promise<array>
+	 * @return array
 	 */
-	public function fetchAll($sql, array $params=[]): Promise {
-		return call(function() use ($sql, $params) {
-			$result = yield $this->query($sql, $params);
+	public function fetchAll($sql, array $params=[]): array {
+        $result = $this->query($sql, $params);
 
-			$rows = [];
+        $rows = [];
 
-			while (yield $result->advance()) {
-				$row = $result->getCurrent();
-				if (!$this->indexBy) {
-                    $rows[] = $row;
-                } else {
-                    if (!isset($row[$this->indexBy])) {
-                        throw new DbException("Undefined indexBy key '{$this->indexBy}'.");
-                    }
-                    $rows[$row[$this->indexBy]] = $row;
+        foreach ($result as $row) {
+            if (!$this->indexBy) {
+                $rows[] = $row;
+            } else {
+                if (!isset($row[$this->indexBy])) {
+                    throw new DbException("Undefined indexBy key '{$this->indexBy}'.");
                 }
-			}
+                $rows[$row[$this->indexBy]] = $row;
+            }
+        }
 
-            $this->indexBy = null;
+        $this->indexBy = null;
 
-			return $rows;
-		});
+        return $rows;
 	}
 
     /**
@@ -205,27 +188,24 @@ class Connection
      * @param $sql
      * @param array $params
      * @param int $col
-     * @return Promise
+     * @return array
      */
-    public function fetchColumn($sql, array $params=[], $col=0): Promise {
-        return call(function() use ($sql, $params, $col) {
-            $cols = [];
-            $result = yield $this->query($sql, $params);
+    public function fetchColumn($sql, array $params=[], $col=0): array {
+        $cols = [];
+        $result = $this->query($sql, $params);
 
-            while (yield $result->advance()) {
-                $row = $result->getCurrent();
-                is_int($col) && $row = array_values($row);
-                if ($this->indexBy) {
-                    $cols[$row[$this->indexBy]] = $row[$col];
-                } else {
-                    $cols[] = $row[$col];
-                }
+        foreach ($result as $row) {
+            is_int($col) && $row = array_values($row);
+            if ($this->indexBy) {
+                $cols[$row[$this->indexBy]] = $row[$col];
+            } else {
+                $cols[] = $row[$col];
             }
+        }
 
-            $this->indexBy = null;
+        $this->indexBy = null;
 
-            return $cols;
-        });
+        return $cols;
     }
 
 }
