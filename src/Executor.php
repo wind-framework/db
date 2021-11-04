@@ -20,7 +20,7 @@ abstract class Executor
      *
      * @var string
      */
-	private $prefix = '';
+	protected $prefix = '';
 
     /**
      * Set fetchAll() return array index is used by special result key
@@ -123,8 +123,6 @@ abstract class Executor
 	public function fetchOne($sql, array $params=[]): Promise {
 		return call(function() use ($sql, $params) {
 			$result = yield $this->query($sql, $params);
-
-            echo get_class($result);
 
 			if (yield $result->advance()) {
 				$row = $result->getCurrent();
