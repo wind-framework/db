@@ -16,6 +16,7 @@ class Connection extends Executor
 {
 
 	private $name;
+    private $type;
 
     /**
      * Connection Pool
@@ -49,6 +50,7 @@ class Connection extends Executor
 
 		$this->conn = pool($conn, $maxConnection, $maxIdleTime);
 		$this->name = $name;
+        $this->type = $config['type'];
 		$this->prefix = $config['prefix'];
 	}
 
@@ -66,6 +68,11 @@ class Connection extends Executor
             $connection = yield $this->conn->beginTransaction();
             return new Transaction($connection);
         });
+    }
+
+    public function getType()
+    {
+        return $this->type;
     }
 
 }
