@@ -82,4 +82,14 @@ class Db
         return (new QueryBuilder(self::connection()))->from($name);
     }
 
+    /**
+     * Start a transaction
+     *
+     * @return Transaction
+     */
+    public static function beginTransaction()
+    {
+        return self::connection()->beginTransaction();
+    }
+
 }
