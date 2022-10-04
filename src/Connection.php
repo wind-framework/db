@@ -2,18 +2,16 @@
 
 namespace Wind\Db;
 
-use Amp\Mysql\ConnectionConfig;
-use Amp\Mysql\Result;
+use Amp\Mysql\MysqlConfig;
+use Amp\Mysql\MysqlConnectionPool;
+use Amp\Mysql\MysqlResult;
 use Amp\Sql\Common\ConnectionPool;
-use Amp\Sql\ConnectionException;
-use Amp\Sql\FailureException;
 use Amp\Sql\QueryError as SqlQueryError;
+use Amp\Sql\SqlException;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Wind\Base\Config;
 use Wind\Db\Event\QueryError;
 use Wind\Db\Event\QueryEvent;
-
-use function Amp\Mysql\pool;
 
 /**
  * Database base Connection and Fetch
@@ -23,7 +21,7 @@ class Connection
 {
 
 	/**
-	 * @var \Amp\Mysql\Pool
+	 * @var MysqlConnectionPool
 	 */
 	private $pool;
 
@@ -46,7 +44,7 @@ class Connection
 		}
 
 		//初始化数据库连接池
-        $conn = new ConnectionConfig(
+        $conn = new MysqlConfig(
             $config['host'],
             $config['port'],
             $config['username'],
@@ -61,7 +59,7 @@ class Connection
 		$maxConnection = $config['pool']['max_connections'] ?? ConnectionPool::DEFAULT_MAX_CONNECTIONS;
 		$maxIdleTime = $config['pool']['max_idle_time'] ?? ConnectionPool::DEFAULT_IDLE_TIMEOUT;
 
-		$this->pool = pool($conn, $maxConnection, $maxIdleTime);
+		$this->pool = new MysqlConnectionPool($conn, $maxConnection, $maxIdleTime);
 		$this->name = $name;
 		$this->prefix = $config['prefix'];
 	}
@@ -85,11 +83,11 @@ class Connection
     /**
      * @param string $sql
      * @param array $params
-     * @return Result
+     * @return MysqlResult
      * @throws QueryException
      * @throws \Amp\Sql\QueryError
      */
-	public function query(string $sql, array $params=[]): Result
+	public function query(string $sql, array $params=[]): MysqlResult
 	{
 	    $eventDispatcher = di()->get(EventDispatcherInterface::class);
         $eventDispatcher->dispatch(new QueryEvent($sql));
@@ -101,7 +99,7 @@ class Connection
             } else {
                 return $this->pool->query($sql);
             }
-        } catch (ConnectionException|FailureException|SqlQueryError $e) {
+        } catch (SqlException|SqlQueryError $e) {
             $eventDispatcher->dispatch(new QueryError($sql, $e));
             throw new QueryException($e->getMessage(), $e->getCode(), $sql);
         }
@@ -114,14 +112,14 @@ class Connection
 	 * @throws QueryException
      * @throws \Amp\Sql\QueryError
 	 */
-	public function execute(string $sql, array $params = []): Result
+	public function execute(string $sql, array $params = []): MysqlResult
 	{
         $eventDispatcher = di()->get(EventDispatcherInterface::class);
         $eventDispatcher->dispatch(new QueryEvent($sql));
 
         try {
             return $this->pool->execute($sql, $params);
-        } catch (ConnectionException|FailureException|SqlQueryError $e) {
+        } catch (SqlException|SqlQueryError $e) {
             $eventDispatcher->dispatch(new QueryError($sql, $e));
             throw new QueryException($e->getMessage(), $e->getCode(), $sql);
         }
