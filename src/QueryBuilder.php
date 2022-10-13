@@ -12,9 +12,9 @@ use function Amp\call;
 /**
  * QueryBuilder
  *
- * @method Promise<array> fetchColumn(int|string $col=0) Fetch column from all rows
- * @method Promise<array> fetchAll() Fetch all rows from query result
- * @method Promise<array>|Promise<null> fetchOne() Fetch first row from query result
+ * @method Promise|array fetchColumn(int|string $col=0) Fetch column from all rows
+ * @method Promise|array fetchAll() Fetch all rows from query result
+ * @method Promise|array|null fetchOne() Fetch first row from query result
  */
 class QueryBuilder {
 
@@ -776,7 +776,7 @@ class QueryBuilder {
 				$key = $this->quoteKeys(substr($key,1));
 				$sets[] = "$key=$val";
 			} else {
-				$sets[] = $this->quoteKeys($key).'='.$this->quote($val);
+				$sets[] = $this->quoteKeys($key).'='.($val === null ? 'NULL' : $this->quote($val));
 			}
 		}
 
