@@ -367,7 +367,7 @@ class QueryBuilder {
 	/**
 	 * Convert Keys To SQL Format
 	 *
-	 * @param string|array $keys
+	 * @param string|array|Expression $keys
 	 * @param bool $single Is a single field in top level
 	 * @return string
 	 */
@@ -380,6 +380,10 @@ class QueryBuilder {
 			}
 			return join(', ', $qk);
 		}
+
+        if ($keys instanceof Expression) {
+            return $keys->get();
+        }
 
 		if (!$single && str_contains($keys, ',')) {
 			//split with comma[,] except in brackets[()] and single quots['']
@@ -490,17 +494,38 @@ class QueryBuilder {
 	public function quoteValues($values)
 	{
 		if (is_array($values)) {
-			$vals = array();
-			foreach($values as $val) {
-				$vals[] = $this->quoteValues($val);
+			$list = [];
+			foreach($values as $k => $v) {
+                $list[] = $this->kvExpress($k, $v)[1];
 			}
-			return join(',', $vals);
+			return join(', ', $list);
 		} elseif ($values === null) {
             return 'NULL';
         } else {
 			return $this->quote($values);
 		}
 	}
+
+    /**
+     * Get [real key name, quoted value]
+     *
+     * @param string|int|null $k
+     * @param mixed $v
+     * @return array
+     */
+    protected function kvExpress($k, $v)
+    {
+        if ($k && substr($k, 0, 1) == '^') {
+            $k = substr($k, 1);
+        } elseif ($v instanceof Expression) {
+            $v = $v->get();
+        } elseif ($v === null) {
+            $v = 'NULL';
+        } else {
+            $v = $this->quoteValues($v);
+        }
+        return [$k, $v];
+    }
 
 	/**
 	 * Parse where condition to sql format
@@ -771,16 +796,12 @@ class QueryBuilder {
 	{
 		$sets = [];
 
-		foreach($data as $key => $val) {
-			if(substr($key, 0, 1) == '^') {
-				$key = $this->quoteKeys(substr($key,1));
-				$sets[] = "$key=$val";
-			} else {
-				$sets[] = $this->quoteKeys($key).'='.($val === null ? 'NULL' : $this->quote($val));
-			}
+		foreach($data as $k => $v) {
+            [$k, $v] = $this->kvExpress($k, $v);
+            $sets[] = sprintf('%s=%s', $k, $v);
 		}
 
-		return join(',', $sets);
+		return join(', ', $sets);
 	}
 
 	public function __call($name, $arguments)
