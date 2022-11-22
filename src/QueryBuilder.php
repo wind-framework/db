@@ -798,7 +798,7 @@ class QueryBuilder {
 
 		foreach($data as $k => $v) {
             [$k, $v] = $this->kvExpress($k, $v);
-            $sets[] = sprintf('%s=%s', $k, $v);
+            $sets[] = sprintf('`%s`=%s', $k, $v);
 		}
 
 		return join(', ', $sets);
