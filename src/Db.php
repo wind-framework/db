@@ -82,4 +82,15 @@ class Db
         return (new QueryBuilder(self::connection()))->from($name);
     }
 
+    /**
+     * Make expression that will not escape when build sql
+     *
+     * @param mixed $value
+     * @return Expression
+     */
+    public static function raw($value)
+    {
+        return new Expression($value);
+    }
+
 }
