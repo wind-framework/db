@@ -77,7 +77,8 @@ class ModelQuery extends QueryBuilder
      */
     private function instanceModel($data)
     {
-        return new $this->modelClass($data);
+        $ref = new \ReflectionClass($this->modelClass);
+        return $ref->newInstance($data, false);
     }
 
 }

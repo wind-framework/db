@@ -9,6 +9,8 @@ use JsonSerializable;
 use Traversable;
 use Wind\Db\ModelQuery;
 
+use function Amp\call;
+
 /**
  * Database Model
  */
@@ -19,7 +21,7 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
     const TABLE = null;
     const PRIMARY_KEY = 'id';
 
-    private $stored = false;
+    private $isNew = false;
 
     private $dirtyAttributes = [];
     private $changedAttributes = [];
@@ -42,18 +44,17 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
     }
 
     public function getIterator(): Traversable {
-        return new ArrayIterator($this->getCurrentArray());
+        return new ArrayIterator($this->getAttributes());
     }
 
     public function jsonSerialize(): mixed {
-        return $this->getCurrentArray();
+        return $this->getAttributes();
     }
 
-    public function getCurrentArray()
+    public function getAttributes()
     {
         return array_merge($this->attributes, $this->dirtyAttributes);
     }
-
 
     public static function query()
     {
@@ -77,9 +78,10 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
     /**
      * @param array $attributes
      */
-    public function __construct($attributes)
+    public function __construct($attributes, $isNew=true)
     {
         $this->attributes = $attributes;
+        $this->isNew = $isNew;
     }
 
     /**
@@ -111,7 +113,111 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
 
     public function __set($name, $value)
     {
-        $this->dirtyAttributes[$name] = $value;
+        $setter = 'set'.ucfirst($name);
+
+        if (method_exists($this, $setter)) {
+            $this->$setter($value);
+        } elseif (!isset($this->attributes[$name]) || $this->attributes[$name] !== $value) {
+            $this->dirtyAttributes[$name] = $value;
+        }
     }
+
+    public function __isset($name)
+    {
+        return isset($this->attributes[$name]) || isset($this->dirtyAttributes[$name]) || method_exists($this, 'get'.ucfirst($name));
+    }
+
+    private function locate()
+    {
+        if (static::PRIMARY_KEY && isset($this->{static::PRIMARY_KEY})) {
+            $condition = [static::PRIMARY_KEY=>$this->{static::PRIMARY_KEY}];
+            return static::query()->where($condition);
+        } else {
+            throw new DbException('No primary key for '.static::class.' to operate.');
+        }
+    }
+
+    private function mergeAttributeChanges()
+    {
+        $this->attributes = array_merge($this->attributes, $this->dirtyAttributes);
+        $this->changedAttributes = array_merge($this->changedAttributes, $this->dirtyAttributes);
+        $this->dirtyAttributes = [];
+    }
+
+    public function save()
+    {
+        return call(function() {
+            if ($this->isNew) {
+                return $this->insert();
+            } else {
+                if ($this->dirtyAttributes) {
+                    yield $this->locate()->update($this->dirtyAttributes);
+                }
+            }
+        });
+    }
+
+    public function insert()
+    {
+        return call(function() {
+            $id = yield self::query()->insert($this->dirtyAttributes);
+            if ($id) {
+                $this->attributes[static::PRIMARY_KEY] = $id;
+            }
+            $this->mergeAttributeChanges();
+            return $id;
+        });
+    }
+
+    public function update()
+    {
+        return call(function() {
+            if ($this->dirtyAttributes) {
+                yield $this->locate()->update($this->dirtyAttributes);
+                $this->mergeAttributeChanges();
+                return true;
+            } else {
+                return false;
+            }
+        });
+    }
+
+    public function updateCounters($counters, $withAttributes=[])
+    {
+        $update = [];
+
+        foreach ($counters as $key => $n) {
+            $update[$key] = new Expression($key.($n >= 0 ? '+' : '-').abs($n));
+            //Todo: quoteKeys() is private in QueryBuilder, can't call here.
+            // $update[$key] = new Expression($this->quoteKeys($key, true).($n >= 0 ? '+' : '-').abs($n));
+        }
+
+        $withAttributes && $update += $withAttributes;
+
+        return $this->locate()->update($update);
+    }
+
+    public function delete()
+    {
+        return $this->locate()->delete();
+    }
+
+    public function beforeCreate()
+    {}
+
+    public function afterCreate()
+    {}
+
+    public function beforeUpdate()
+    {}
+
+    public function afterUpdate()
+    {}
+
+    public function beforeDelete()
+    {}
+
+    public function afterDelete()
+    {}
 
 }
