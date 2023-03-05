@@ -98,6 +98,12 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
             return $this->dirtyAttributes[$name];
         } elseif (array_key_exists($name, $this->attributes)) {
             return $this->attributes[$name];
+        }
+
+        $getter = 'get'.ucfirst($name);
+
+        if (method_exists($this, $getter)) {
+            return $this->$getter();
         } else {
             throw new \Exception(sprintf('Undefined property: %s::$%s', static::class, $name));
         }
