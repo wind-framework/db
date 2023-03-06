@@ -8,6 +8,7 @@ use IteratorAggregate;
 use JsonSerializable;
 use Traversable;
 use Wind\Db\ModelQuery;
+use Wind\Event\EventDispatcher;
 
 use function Amp\call;
 
@@ -26,6 +27,8 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
     private $dirtyAttributes = [];
     private $changedAttributes = [];
     private $attributes = [];
+
+    private EventDispatcher $eventDispatcher;
 
     public function offsetExists($name): bool {
         return isset($this->attributes[$name]) || isset($this->dirtyAttributes[$name]);
@@ -147,24 +150,34 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
     public function save()
     {
         return call(function() {
+            yield $this->dispatchEvent('beforeSave', $this->isNew);
+
             if ($this->isNew) {
-                return $this->insert();
+                yield $this->insert();
             } else {
                 if ($this->dirtyAttributes) {
                     yield $this->locate()->update($this->dirtyAttributes);
                 }
             }
+
+            yield $this->dispatchEvent('afterSave', $this->isNew);
         });
     }
 
     public function insert()
     {
         return call(function() {
+            yield $this->dispatchEvent('beforeInsert', $this->isNew);
+
             $id = yield self::query()->insert($this->dirtyAttributes);
             if ($id) {
                 $this->attributes[static::PRIMARY_KEY] = $id;
             }
+
             $this->mergeAttributeChanges();
+
+            yield $this->dispatchEvent('afterInsert', $this->isNew);
+
             return $id;
         });
     }
@@ -172,9 +185,14 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
     public function update()
     {
         return call(function() {
+            yield $this->dispatchEvent('beforeUpdate');
+
             if ($this->dirtyAttributes) {
                 yield $this->locate()->update($this->dirtyAttributes);
                 $this->mergeAttributeChanges();
+
+                yield $this->dispatchEvent('afterInsert');
+
                 return true;
             } else {
                 return false;
@@ -182,36 +200,85 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
         });
     }
 
-    public function updateCounters($counters, $withAttributes=[])
-    {
-        $update = [];
-
-        foreach ($counters as $key => $n) {
-            $update[$key] = new Expression($key.($n >= 0 ? '+' : '-').abs($n));
-            //Todo: quoteKeys() is private in QueryBuilder, can't call here.
-            // $update[$key] = new Expression($this->quoteKeys($key, true).($n >= 0 ? '+' : '-').abs($n));
-        }
-
-        $withAttributes && $update += $withAttributes;
-
-        return $this->locate()->update($update);
-    }
-
     public function delete()
     {
-        return $this->locate()->delete();
+        return call(function() {
+            yield $this->dispatchEvent('beforeDelete');
+            if (yield $this->locate()->delete() > 0) {
+                yield $this->dispatchEvent('afterDelete');
+            }
+        });
     }
 
-    public function beforeCreate()
+    public function updateCounters($counters, $withAttributes=[])
+    {
+        return call(function() use ($counters, $withAttributes) {
+            $update = [];
+
+            foreach ($counters as $key => $n) {
+                $update[$key] = new ModelCounter($n);
+            }
+
+            $withAttributes && $update += $withAttributes;
+
+            //在触发 updateCounters 的 beforeUpdate 事件时，dirtyAttributes 是包含 ModelCounter 实例字段的
+            $this->dirtyAttributes = $update;
+            yield $this->dispatchEvent('beforeUpdate');
+
+            if ((yield $this->locate()->update($update)) > 0) {
+                //在合并进 attributes 和 changedAttributes 时，不能把 ModelCounter 实例合并进去，因为这并不是真正的值
+                $this->dirtyAttributes = $withAttributes;
+                $this->mergeAttributeChanges();
+
+                //在合并完值之后，如果模型原本存在 counters 中的字段，则对模型该属性递增或递减，确保在后续能获取到变化的值，
+                //但是注意，这里递增和递减后的值仅用于表达有变化的一种预估，由于可能存在并发原因，并不能代表真实数据库中的更新后的值。
+                //如果模型属性中原本就没有查出该字段，则 updateCounters 之后仍不会有该字段，因为除非查询一次，否则无法得知任何预估的值。
+                foreach ($counters as $key => $n) {
+                    if (isset($this->attributes[$key])) {
+                        $this->attributes[$key] += $n;
+                        $this->changedAttributes[$key] = $this->attributes[$key];
+                    }
+                }
+
+                yield $this->dispatchEvent('afterUpdate');
+            }
+        });
+    }
+
+    public function increment($name, $value=1, $withAttributes=[])
+    {
+        return $this->updateCounters([$name=>$value], $withAttributes);
+    }
+
+    public function decrement($name, $value=1, $withAttributes=[])
+    {
+        return $this->updateCounters([$name=>-$value], $withAttributes);
+    }
+
+    protected function dispatchEvent($name, ...$args)
+    {
+        return call(function() use ($name, $args) {
+            $this->$name(...$args);
+        });
+    }
+
+    public function beforeInsert()
     {}
 
-    public function afterCreate()
+    public function afterInsert()
     {}
 
     public function beforeUpdate()
-    {}
+    {
+    }
 
     public function afterUpdate()
+    {}
+
+    public function beforeSave()
+    {}
+
+    public function afterSave()
     {}
 
     public function beforeDelete()

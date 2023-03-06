@@ -81,4 +81,21 @@ class ModelQuery extends QueryBuilder
         return $ref->newInstance($data, false);
     }
 
+	/**
+	 * Update data
+	 *
+	 * @param array $data
+	 * @return Promise<int> Affected row count
+	 */
+	public function update(array $data): Promise
+	{
+        foreach ($data as $key => $value) {
+            if ($value instanceof ModelCounter) {
+                $n = $value->get();
+                $data[$key] = new Expression($this->quoteKeys($key, true).($n >= 0 ? '+' : '-').abs($n));
+            }
+        }
+        return parent::update($data);
+	}
+
 }

@@ -94,7 +94,7 @@ class QueryBuilder {
 	 * ['id >='=>100, 'live EXISTS'=>'system'] -> `id`>=100 AND `live` EXISTS ('system')
 	 *
 	 * @param null $params Unsupported yet!
-	 * @return $this
+	 * @return static
 	 */
 	public function where($cond, $params=null)
 	{
@@ -115,7 +115,7 @@ class QueryBuilder {
 
 	/**
 	 * @param string|array $groupBy
-	 * @return $this
+	 * @return static
 	 */
 	public function groupBy($groupBy)
 	{
@@ -125,7 +125,7 @@ class QueryBuilder {
 
 	/**
 	 * @param array|string $order
-	 * @return $this
+	 * @return static
 	 */
 	public function orderBy($order)
 	{
@@ -138,7 +138,7 @@ class QueryBuilder {
 	 *
 	 * @param int $limit
 	 * @param int $offset
-	 * @return self
+	 * @return static
 	 */
 	public function limit($limit, $offset=null)
 	{
