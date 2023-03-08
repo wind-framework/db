@@ -73,6 +73,20 @@ class ModelQuery extends QueryBuilder
 	}
 
     /**
+     * Find one by primary key
+     * @return Promise<Model|null>
+     */
+    public function find($id)
+    {
+        if ($this->modelClass::PRIMARY_KEY) {
+            $condition = [$this->modelClass::PRIMARY_KEY=>$id];
+            return $this->where($condition)->fetchOne();
+        } else {
+            throw new DbException('No primary key for '.$this->modelClass.' to find.');
+        }
+    }
+
+    /**
      * @return Model
      */
     private function instanceModel($data)

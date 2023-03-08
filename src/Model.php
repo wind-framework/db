@@ -24,11 +24,33 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
 
     private $isNew = false;
 
+    /**
+     * Dirty attributes are fields that have been changed but not saved to database
+     * @var array
+     */
     private $dirtyAttributes = [];
+
+    /**
+     * Changed attributes are fields that have been changed and also saved to database
+     * @var array
+     */
     private $changedAttributes = [];
+
+    /**
+     * All fields queried from or saved into the database
+     */
     private $attributes = [];
 
     private EventDispatcher $eventDispatcher;
+
+    /**
+     * @param array $attributes
+     */
+    public function __construct($attributes, $isNew=true)
+    {
+        $this->attributes = $attributes;
+        $this->isNew = $isNew;
+    }
 
     public function offsetExists($name): bool {
         return isset($this->attributes[$name]) || isset($this->dirtyAttributes[$name]);
@@ -79,12 +101,12 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
     }
 
     /**
-     * @param array $attributes
+     * Find one by primary key
+     * @return Promise<static|null>
      */
-    public function __construct($attributes, $isNew=true)
+    public static function find($id)
     {
-        $this->attributes = $attributes;
-        $this->isNew = $isNew;
+        return static::query()->find($id);
     }
 
     /**
@@ -145,6 +167,24 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
         $this->attributes = array_merge($this->attributes, $this->dirtyAttributes);
         $this->changedAttributes = array_merge($this->changedAttributes, $this->dirtyAttributes);
         $this->dirtyAttributes = [];
+    }
+
+    /**
+     * Get fields that have been changed but not saved to database
+     * @return array
+     */
+    public function getDirtyAttributes()
+    {
+        return $this->dirtyAttributes;
+    }
+
+    /**
+     * Get fields that have been changed and also saved to database
+     * @return array
+     */
+    public function getChangedAttributes()
+    {
+        return $this->changedAttributes;
     }
 
     public function save()
