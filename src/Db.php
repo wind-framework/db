@@ -93,4 +93,14 @@ class Db
         return new Expression($value);
     }
 
+    /**
+     * Start a transaction
+     *
+     * @return Promise<Transaction>
+     */
+    public static function beginTransaction()
+    {
+        return self::connection()->beginTransaction();
+    }
+
 }
