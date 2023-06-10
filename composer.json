@@ -4,7 +4,7 @@
     "type": "library",
     "require": {
         "wind-framework/wind-framework": "1.0.x-dev",
-        "amphp/mysql": "v3.x-dev"
+        "amphp/mysql": "^3.0"
     },
     "license": "Apache-2.0",
     "authors": [

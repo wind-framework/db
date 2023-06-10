@@ -2,7 +2,7 @@
 
 namespace Wind\Db;
 
-use Amp\Mysql\Result;
+use Amp\Mysql\MysqlResult;
 
 class Db
 {
@@ -28,11 +28,10 @@ class Db
     /**
      * @param string $sql
      * @param array $params
-     * @return Result
      * @throws \Amp\Sql\ConnectionException
      * @throws \Amp\Sql\FailureException
      */
-    public static function query(string $sql, array $params=[]): Result
+    public static function query(string $sql, array $params=[]): MysqlResult
     {
         return self::connection()->query($sql, $params);
     }
@@ -40,11 +39,10 @@ class Db
     /**
      * @param string $sql
      * @param array $params
-     * @return Result
      * @throws \Amp\Sql\ConnectionException
      * @throws \Amp\Sql\FailureException
      */
-    public static function execute(string $sql, array $params = []): Result
+    public static function execute(string $sql, array $params = []): MysqlResult
     {
         return self::connection()->execute($sql, $params);
     }

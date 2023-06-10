@@ -83,7 +83,6 @@ class Connection
     /**
      * @param string $sql
      * @param array $params
-     * @return MysqlResult
      * @throws QueryException
      * @throws \Amp\Sql\QueryError
      */
@@ -108,7 +107,6 @@ class Connection
 	/**
 	 * @param string $sql
 	 * @param array $params
-	 * @return \Amp\Mysql\Result
 	 * @throws QueryException
      * @throws \Amp\Sql\QueryError
 	 */
@@ -133,11 +131,7 @@ class Connection
 	 * @return array|null
 	 */
 	public function fetchOne($sql, array $params=[]): ?array {
-        $result = $this->query($sql, $params);
-        foreach ($result as $row) {
-            return $row;
-        }
-        return null;
+        return $this->query($sql, $params)->fetchRow();
 	}
 
 	/**
