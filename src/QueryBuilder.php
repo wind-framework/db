@@ -8,10 +8,6 @@ namespace Wind\Db;
 
 /**
  * QueryBuilder
- *
- * @method array fetchColumn(int|string $col=0) Fetch column from all rows
- * @method array fetchAll() Fetch all rows from query result
- * @method array|null fetchOne() Fetch first row from query result
  */
 class QueryBuilder {
 
@@ -800,21 +796,38 @@ class QueryBuilder {
 		return join(', ', $sets);
 	}
 
-	public function __call($name, $arguments)
-	{
-		if (substr($name, 0, 5) == 'fetch') {
-			if (isset($this->builder['index_by'])) {
-				$this->connection->indexBy($this->builder['index_by']);
-			}
-
-			array_unshift($arguments, []);
-			array_unshift($arguments, $this->buildSelect());
-
-			return call_user_func_array([$this->connection, $name], $arguments);
-		} else {
-			throw new \ErrorException("Call to undefined method \Wind\Db\QueryBuilder::{$name}()");
-		}
+	/**
+	 * 查询一条数据出来
+	 */
+	public function fetchOne(): ?array {
+        return $this->connection->fetchOne($this->buildSelect());
 	}
+
+	/**
+	 * 查询出全部数据
+	 */
+	public function fetchAll(): array {
+        $sql = $this->buildSelect();
+        if (!isset($this->builder['index_by'])) {
+            return $this->connection->fetchAll($sql);
+        } else {
+            return $this->connection->indexBy($this->builder['index_by'])->fetchAll($sql);
+        }
+	}
+
+    /**
+     * Fetch column from all rows
+     *
+     * @param int $col
+     */
+    public function fetchColumn($col=0): array {
+        $sql = $this->buildSelect();
+        if (!isset($this->builder['index_by'])) {
+            return $this->connection->fetchColumn($sql, [], $col);
+        } else {
+            return $this->connection->indexBy($this->builder['index_by'])->fetchColumn($sql, [], $col);
+        }
+    }
 
 	//public function distinct($field)
 	//{
