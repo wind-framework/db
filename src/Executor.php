@@ -137,6 +137,23 @@ abstract class Executor
 		});
 	}
 
+    /**
+     * Set key for fetchAll() return array
+     *
+     * Usage:
+     * $connection->indexBy('id')->fetchAll();
+     * $connection->indexBy('id')->fetchColumn();
+     *
+     * @param string $key
+     * @return static
+     */
+    public function indexBy($key)
+    {
+        $connection = clone $this;
+        $connection->indexBy = $key;
+        return $connection;
+    }
+
 	/**
 	 * 查询出全部数据
 	 *
@@ -167,18 +184,6 @@ abstract class Executor
 			return $rows;
 		});
 	}
-
-    /**
-     * Set key for fetchAll() return array
-     *
-     * @param string $key
-     * @return $this
-     */
-    public function indexBy($key)
-    {
-        $this->indexBy = $key;
-        return $this;
-    }
 
     /**
      * Fetch column from all rows

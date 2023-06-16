@@ -18,6 +18,10 @@ class Expression
         $this->value = $value;
     }
 
+    /**
+     * Get original value
+     * @return mixed
+     */
     public function get()
     {
         return $this->value;

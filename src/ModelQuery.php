@@ -105,7 +105,7 @@ class ModelQuery extends QueryBuilder
 	{
         foreach ($data as $key => $value) {
             if ($value instanceof ModelCounter) {
-                $n = $value->get();
+                $n = (int)$value->__toString();
                 $data[$key] = new Expression($this->quoteKeys($key, true).($n >= 0 ? '+' : '-').abs($n));
             }
         }
