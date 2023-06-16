@@ -15,11 +15,15 @@ namespace Wind\Db;
  */
 class QueryBuilder {
 
+    /**
+     * @var Executor
+     */
     protected $connection;
+
 	protected $builder = [];
 	protected $table;
 
-	public function __construct(Connection $connection)
+	public function __construct(Executor $connection)
 	{
 	    $this->connection = $connection;
 	}

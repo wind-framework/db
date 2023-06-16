@@ -81,6 +81,16 @@ class Db
     }
 
     /**
+     * Start a transaction
+     *
+     * @return Transaction
+     */
+    public static function beginTransaction()
+    {
+        return self::connection()->beginTransaction();
+    }
+
+    /**
      * Make expression that will not escape when build sql
      *
      * @param mixed $value
