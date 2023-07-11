@@ -8,6 +8,24 @@ namespace Wind\Db;
 
 /**
  * QueryBuilder
+ *
+ * @psalm-type TJoin = array{type:string, table:string, compopr:string|array, alias:string|null}
+ *
+ * @psalm-type TBuilder = array{
+ *     select?: string|string[],
+ *     select_quote?: bool,
+ *     alias?: string,
+ *     join?: TJoin[],
+ *     union?: string,
+ *     where?: string|array<array-key, string|array>,
+ *     where_params?: array,
+ *     limit?: int,
+ *     offset?: int,
+ *     index_by?: string,
+ *     having?: string|array<array-key, string|array>,
+ *     group_by?: string|string[],
+ *     order_by?: string|array<string, 3|4|string>
+ * }
  */
 class QueryBuilder {
 
@@ -16,7 +34,12 @@ class QueryBuilder {
      */
     protected $connection;
 
+    /**
+     * @var TBuilder
+     */
 	protected $builder = [];
+
+    /** @var string */
 	protected $table;
 
 	public function __construct(Executor $connection)
@@ -24,38 +47,93 @@ class QueryBuilder {
 	    $this->connection = $connection;
 	}
 
-	public function select($fields, $quote=true)
+    /**
+     * Select query fields
+     *
+     * @param string|string[] $fields
+     * @param bool $quote
+     */
+	public function select($fields, $quote=true): static
 	{
 		$this->builder['select'] = $fields;
 		$this->builder['select_quote'] = $quote;
 		return $this;
 	}
 
-    public function from($table, $alias=null)
+    /**
+     * Select from table
+     *
+     * @param string|string[] $table
+     * @param string|null $alias
+     */
+    public function from($table, $alias=null): static
     {
         $this->table = $this->quoteTable($table);
         return $alias ? $this->alias($alias) : $this;
     }
 
-	public function alias($alias)
+    /**
+     * Set alias of table name
+     *
+     * It means `AS` of SQL
+     *
+     * @param string $alias
+     */
+	public function alias($alias): static
 	{
 		$this->builder['alias'] = $alias;
 		return $this;
 	}
 
-	public function join($table, $compopr, $type='', $alias=null)
+    /**
+     * Join table
+     *
+     * @param string $table
+     * @param string|array $compopr
+     * @param string $type One of "LEFT"|"RIGHT"|"INNER"|"OUTER"|""
+     * @param string|null $alias
+     */
+	public function join($table, $compopr, $type='', $alias=null): static
 	{
 		$type = strtoupper($type);
 		$this->builder['join'][] = compact('type', 'table', 'compopr', 'alias');
 		return $this;
 	}
 
+	/**
+     * Left join
+     * @psalm-suppress MissingParamType
+     * @psalm-suppress MissingReturnType
+     */
 	public function leftJoin($table, $compopr, $alias=null) { return $this->join($table, $compopr, 'left', $alias); }
+
+    /**
+     * Right join
+     * @psalm-suppress MissingParamType
+     * @psalm-suppress MissingReturnType
+     */
 	public function rightJoin($table, $compopr, $alias=null) { return $this->join($table, $compopr, 'right', $alias); }
+
+    /**
+     * Inner join
+     * @psalm-suppress MissingParamType
+     * @psalm-suppress MissingReturnType
+     */
 	public function innerJoin($table, $compopr, $alias=null) { return $this->join($table, $compopr, 'inner', $alias); }
+
+    /**
+     * Outer join
+     * @psalm-suppress MissingParamType
+     * @psalm-suppress MissingReturnType
+     */
 	public function outerJoin($table, $compopr, $alias=null) { return $this->join($table, $compopr, 'outer', $alias); }
 
-	public function union($all=false)
+    /**
+     * Union the next select
+     *
+     * @param bool $all Is union all
+     */
+	public function union($all=false): static
 	{
 		$sql = $this->buildSelect();
 		$this->builder['union'] = $sql.($all ? ' UNION ALL ' : ' UNION ');
@@ -65,7 +143,7 @@ class QueryBuilder {
 	/**
 	 * Set where conditions.
 	 *
-	 * @param array|string $cond Complex where condition array or string.
+	 * @param array<string, string|array>|string $cond Complex where condition array or string.
 	 *
 	 * Simple condition:
 	 * ['id'=>100]
@@ -90,10 +168,9 @@ class QueryBuilder {
 	 * =, !=, >, >=, <, <=, EXISTS, NOT EXISTS and others
 	 * ['id >='=>100, 'live EXISTS'=>'system'] -> `id`>=100 AND `live` EXISTS ('system')
 	 *
-	 * @param null $params Unsupported yet!
-	 * @return $this
+	 * @param array|null $params Unsupported yet!
 	 */
-	public function where($cond, $params=null)
+	public function where($cond, $params=null): static
 	{
 		$this->builder['where'] = $cond;
 
@@ -104,27 +181,32 @@ class QueryBuilder {
 		return $this;
 	}
 
-	public function having($having)
+    /**
+     * Set having conditions, like where
+     *
+	 * @param array<string, string|array>|string $having Complex where condition array or string.
+     */
+	public function having($having): static
 	{
 		$this->builder['having'] = $having;
 		return $this;
 	}
 
 	/**
-	 * @param string|array $groupBy
-	 * @return $this
+	 * @param string|string[] $groupBy
 	 */
-	public function groupBy($groupBy)
+	public function groupBy($groupBy): static
 	{
 		$this->builder['group_by'] = $groupBy;
 		return $this;
 	}
 
 	/**
-	 * @param array|string $order
-	 * @return $this
+     * Sort the result
+     *
+	 * @param array<string, 3|4|string>|string $order Key is field name, value is constant of SORT_ASC, SORT_DESC or string 'asc', 'desc'
 	 */
-	public function orderBy($order)
+	public function orderBy($order): static
 	{
 		$this->builder['order_by'] = $order;
 		return $this;
@@ -135,16 +217,20 @@ class QueryBuilder {
 	 *
 	 * @param int $limit
 	 * @param int $offset
-	 * @return self
 	 */
-	public function limit($limit, $offset=null)
+	public function limit($limit, $offset=null): static
 	{
 		$this->builder['limit'] = $limit;
 		$offset !== null && $this->builder['offset'] = $offset;
 		return $this;
 	}
 
-	public function offset($num)
+    /**
+     * Offset
+     *
+     * @param int $num
+     */
+	public function offset($num): static
 	{
 		$this->builder['offset'] = $num;
 		return $this;
@@ -156,7 +242,8 @@ class QueryBuilder {
 	 * @param string $key
 	 * @return static
 	 */
-	public function indexBy($key) {
+	public function indexBy($key): static
+    {
 		$this->builder['index_by'] = $key;
 		return $this;
 	}
@@ -181,6 +268,10 @@ class QueryBuilder {
 
 		//SELECT
 		if (isset($this->builder['select'])) {
+            /**
+             * @psalm-suppress PossiblyUndefinedArrayOffset
+             * @psalm-suppress PossiblyInvalidOperand
+             */
 			$sql .= 'SELECT '.
 				($this->builder['select_quote']
 					? $this->quoteKeys($this->builder['select'])
@@ -220,12 +311,15 @@ class QueryBuilder {
 		return '';
 	}
 
+    /**
+     * @return string
+     */
 	protected function buildJoin()
 	{
 		if (isset($this->builder['join'])) {
 			$sql = '';
 			foreach ($this->builder['join'] as $join) {
-				$sql .= ' '.$join['type'].' JOIN '.$this->quoteTable($this->builder['alias'] ? $join['table'].' '.$join['alias'] : $join['table']);
+				$sql .= ' '.$join['type'].' JOIN '.$this->quoteTable($join['alias'] ? $join['table'].' '.$join['alias'] : $join['table']);
 				//only a field mean USING()
 				if (is_string($join['compopr']) && preg_match('/^[^\(\)\=]+$/', $join['compopr'])) {
 					$sql .= ' USING('.$this->quoteKeys($join['compopr'], true).')';
@@ -239,6 +333,10 @@ class QueryBuilder {
 		return '';
 	}
 
+    /**
+     * @param string|array $compopr
+     * @return string
+     */
 	protected function parseJoinCompopr($compopr)
 	{
 		if (is_array($compopr)) {
@@ -255,7 +353,7 @@ class QueryBuilder {
 				$poly = false;
 				if (is_int($k)) {
 					$str = $this->parseJoinCompopr($v);
-					!$poly && count($v) > 1 && $poly = true;
+					count($v) > 1 && $poly = true;
 				} else {
 					$str = $this->parseWhere($k, $v);
 				}
@@ -270,7 +368,7 @@ class QueryBuilder {
 		return $this->quoteKeys($lkey).$symbol.$this->quoteKeys($rkey);
 	}
 
-	protected function buildWhere()
+	protected function buildWhere(): string
 	{
 		if (isset($this->builder['where'])) {
 			$where = $this->parseWhere($this->builder['where']);
@@ -285,19 +383,19 @@ class QueryBuilder {
 		return '';
 	}
 
-	protected function buildGroupBy()
+	protected function buildGroupBy(): string
 	{
 		return isset($this->builder['group_by']) ?
 			' GROUP BY '.$this->quoteKeys($this->builder['group_by']) : '';
 	}
 
-	protected function buildHaving()
+	protected function buildHaving(): string
 	{
 		return isset($this->builder['having']) ?
 			' HAVING '.$this->parseWhere($this->builder['having']) : '';
 	}
 
-	protected function buildOrderBy()
+	protected function buildOrderBy(): string
 	{
 		$sql = '';
 
@@ -338,7 +436,7 @@ class QueryBuilder {
 		return $sql;
 	}
 
-	protected function buildLimit()
+	protected function buildLimit(): string
 	{
 		if (isset($this->builder['limit'])) {
 			$sql = ' LIMIT ';
@@ -356,7 +454,7 @@ class QueryBuilder {
 		return '';
 	}
 
-	protected function buildOffset()
+	protected function buildOffset(): string
 	{
 		return isset($this->builder['offset']) ? " OFFSET {$this->builder['offset']}" : '';
 	}
@@ -364,7 +462,7 @@ class QueryBuilder {
 	/**
 	 * Convert Keys To SQL Format
 	 *
-	 * @param string|array|Expression $keys
+	 * @param string|string[]|Expression $keys
 	 * @param bool $single Is a single field in top level
 	 * @return string
 	 */
@@ -379,7 +477,7 @@ class QueryBuilder {
 		}
 
         if ($keys instanceof Expression) {
-            return $keys->get();
+            return (string)$keys;
         }
 
 		if (!$single && str_contains($keys, ',')) {
@@ -438,6 +536,12 @@ class QueryBuilder {
 		return $str;
 	}
 
+    /**
+     * Quote table as SQL string
+     *
+     * @param string|string[] $table
+     * @return string
+     */
 	protected function quoteTable($table)
 	{
 		if (is_array($table)) {
@@ -485,7 +589,7 @@ class QueryBuilder {
 	/**
 	 * Quote values to safe sql string
 	 *
-	 * @param string|array $values
+	 * @param mixed $values
 	 * @return string Keys
 	 */
 	public function quoteValues($values)
@@ -506,16 +610,17 @@ class QueryBuilder {
     /**
      * Get [real key name, quoted value]
      *
-     * @param string|int|null $k
+     * @param string|int $k
      * @param mixed $v
      * @return array
+     * @psalm-return list{int|string, string}
      */
     protected function kvExpress($k, $v)
     {
-        if ($k && substr($k, 0, 1) == '^') {
+        if ($k && is_string($k) && str_starts_with($k, '^')) {
             $k = substr($k, 1);
         } elseif ($v instanceof Expression) {
-            $v = $v->get();
+            $v = (string)$v;
         } elseif ($v === null) {
             $v = 'NULL';
         } else {
@@ -601,23 +706,19 @@ class QueryBuilder {
 			case '<=':
 			case '<>':
 				return $key.$cond.$this->quote($value);
-				break;
 
 			case 'IN':
 			case 'NOT IN':
 				return "$key $cond(".$this->quoteValues($value).')';
-				break;
 
 			case 'EXISTS':
 			case 'NOT EXISTS':
 				return $key.' '.$cond.'('.$value.')';
-				break;
 
 			case 'BETWEEN':
 				is_numeric($value[0]) || $value[0] = $this->quote($value[0]);
 				is_numeric($value[1]) || $value[1] = $this->quote($value[1]);
 				return "$key BETWEEN {$value[0]} AND {$value[1]}";
-				break;
 
 			default:
 				if (preg_match('/^\w+$/i', $cond)) {
@@ -627,6 +728,10 @@ class QueryBuilder {
 		}
 	}
 
+    /**
+     * @param string $string
+     * @return string
+     */
 	public function quote($string) {
 		return '\''.addslashes($string).'\'';
 	}
@@ -642,7 +747,7 @@ class QueryBuilder {
 	 * Split the table/field alias string
 	 *
 	 * @param string $str
-	 * @return array|bool
+	 * @psalm-return array{0:string, 1:string, 2:string}|false
 	 */
 	protected function splitAs($str)
 	{
@@ -663,6 +768,10 @@ class QueryBuilder {
 		return [$col, $as, $alias];
 	}
 
+    /**
+     * @param string $str
+     * @return string
+     */
 	protected function trim($str)
 	{
 		return preg_replace('/\s+/', ' ', trim($str, ' `'));
@@ -673,7 +782,6 @@ class QueryBuilder {
 	 *
 	 * @param array $data
 	 * @return int Last insert id
-	 * @throws
 	 */
 	public function insert(array $data)
 	{
@@ -685,7 +793,6 @@ class QueryBuilder {
 	 *
 	 * @param array $data
 	 * @return int Last insert id, return 0 if ignored.
-	 * @throws
 	 */
 	public function insertIgnore(array $data)
 	{
@@ -698,7 +805,6 @@ class QueryBuilder {
 	 * @param array $data
 	 * @param array $update Update key values on duplicate key
 	 * @return int Last insert or updated id, return 0 if no changed.
-	 * @throws
 	 */
 	public function insertOrUpdate(array $data, array $update)
 	{
@@ -711,7 +817,6 @@ class QueryBuilder {
 	 *
 	 * @param array $data
 	 * @return int Last insert id
-	 * @throws
 	 */
 	public function replace(array $data)
 	{
@@ -726,7 +831,6 @@ class QueryBuilder {
 	 * @param string $mode Insert mode, INTO or IGNORE
 	 * @param string $after Append sql
 	 * @return int Last insert id
-	 * @throws
 	 */
 	private function insertCommand(array $data, $cmd='INSERT', $mode='INTO', $after=null)
 	{
@@ -839,7 +943,7 @@ class QueryBuilder {
 	 * Count rows
 	 *
 	 * @param string $field
-	 * @return int|null
+     * @return int
 	 */
 	public function count($field='*')
 	{
@@ -849,9 +953,9 @@ class QueryBuilder {
         $this->select("COUNT($field)", false);
         $count = $this->scalar();
 
-        $this->resumeTempBuilder($builder);;
+        $this->resumeTempBuilder($builder);
 
-        return $count;
+        return (int)$count;
 	}
 
 	/**
@@ -859,7 +963,6 @@ class QueryBuilder {
 	 *
 	 * @param int|string $col
 	 * @return mixed
-	 * @throws
 	 */
 	public function scalar($col=0)
 	{
@@ -876,10 +979,13 @@ class QueryBuilder {
         return $row[$col] ?? null;
 	}
 
+    /**
+     * @return array
+     */
     private function popTempBuilder()
     {
         $builder = [];
-        foreach (['select', 'select_quote', 'limit', 'offset'] as $key) {
+        foreach (['select', 'select_quote', 'limit', 'offset', 'index_by'] as $key) {
             if (isset($this->builder[$key])) {
                 $builder[$key] = $this->builder[$key];
                 unset($this->builder[$key]);
@@ -888,13 +994,15 @@ class QueryBuilder {
         return $builder;
     }
 
+    /**
+     * @param TBuilder $builder
+     * @psalm-suppress MissingReturnType
+     */
     private function resumeTempBuilder($builder)
     {
-        foreach (['select', 'select_quote', 'limit', 'offset'] as $key) {
+        foreach (['select', 'select_quote', 'limit', 'offset', 'index_by'] as $key) {
             if (isset($builder[$key])) {
                 $this->builder[$key] = $builder[$key];
-            } else {
-                unset($this->builder[$key]);
             }
         }
     }
