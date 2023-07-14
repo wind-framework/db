@@ -901,16 +901,22 @@ class QueryBuilder {
 	}
 
 	/**
-	 * 查询一条数据出来
+	 * Fetch first row as array
+     *
+     * @return array|null
 	 */
-	public function fetchOne(): ?array {
+	public function fetchOne()
+    {
         return $this->connection->fetchOne($this->buildSelect());
 	}
 
 	/**
-	 * 查询出全部数据
+	 * Fetch all rows as array list
+     *
+     * @return array
 	 */
-	public function fetchAll(): array {
+	public function fetchAll()
+    {
         $sql = $this->buildSelect();
         if (!isset($this->builder['index_by'])) {
             return $this->connection->fetchAll($sql);
