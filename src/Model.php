@@ -100,7 +100,7 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
 
     /**
      * Find one by primary key
-     * @return Promise<static|null>
+     * @return static|null
      */
     public static function find($id)
     {
