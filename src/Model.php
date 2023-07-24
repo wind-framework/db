@@ -7,7 +7,6 @@ use ArrayIterator;
 use IteratorAggregate;
 use JsonSerializable;
 use Traversable;
-use Wind\Db\ModelQuery;
 use Wind\Event\EventDispatcher;
 
 /**
@@ -19,8 +18,6 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
     const CONNECTION = null;
     const TABLE = null;
     const PRIMARY_KEY = 'id';
-
-    private $isNew = false;
 
     /**
      * Dirty attributes are fields that have been changed but not saved to database
@@ -34,21 +31,16 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
      */
     private $changedAttributes = [];
 
-    /**
-     * All fields queried from or saved into the database
-     */
-    private $attributes = [];
-
     private EventDispatcher $eventDispatcher;
 
     /**
-     * @param array $attributes
+     * @param array $attributes All fields queried from or saved into the database
      */
-    public function __construct($attributes, $isNew=true)
-    {
-        $this->attributes = $attributes;
-        $this->isNew = $isNew;
-    }
+    public function __construct(
+        public array $attributes=[],
+        private bool $isNew=true
+    )
+    {}
 
     public function offsetExists($name): bool {
         return isset($this->attributes[$name]) || isset($this->dirtyAttributes[$name]);
@@ -70,7 +62,7 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
         return new ArrayIterator($this->getAttributes());
     }
 
-    public function jsonSerialize(): mixed {
+    public function jsonSerialize(): array {
         return $this->getAttributes();
     }
 
@@ -204,7 +196,7 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
     {
         $this->dispatchEvent('beforeInsert', $this->isNew);
 
-        $id = self::query()->insert($this->dirtyAttributes);
+        $id = self::query()->insert($this->getAttributes());
         if ($id) {
             $this->attributes[static::PRIMARY_KEY] = $id;
         }
@@ -240,6 +232,14 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
         }
     }
 
+    /**
+     * Update counters
+     *
+     * @param array $counters Update counter field-value map, value is positive number means plus, value is negative number mean decrease.
+     * @param array $withAttributes Update with other field-value map.
+     * @return int Affected rows count
+     * @throws DbException
+     */
     public function updateCounters($counters, $withAttributes=[])
     {
         $update = [];
@@ -254,7 +254,9 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
         $this->dirtyAttributes = $update;
         $this->dispatchEvent('beforeUpdate');
 
-        if ($this->locate()->update($update) > 0) {
+        $affected = $this->locate()->update($update);
+
+        if ($affected > 0) {
             //在合并进 attributes 和 changedAttributes 时，不能把 ModelCounter 实例合并进去，因为这并不是真正的值
             $this->dirtyAttributes = $withAttributes;
             $this->mergeAttributeChanges();
@@ -271,6 +273,8 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
 
             $this->dispatchEvent('afterUpdate');
         }
+
+        return $affected;
     }
 
     public function increment($name, $value=1, $withAttributes=[])
