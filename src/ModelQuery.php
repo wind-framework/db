@@ -4,19 +4,24 @@ namespace Wind\Db;
 
 /**
  * Query Builder for Model
+ *
+ * @template T of Model
  */
 class ModelQuery extends QueryBuilder
 {
 
+    /** @var class-string<T> */
     protected $modelClass;
 
     /**
-     * @return self
+     * @param class-string<T> Model class string
+     * @return self<T>
      */
     public static function create($modelClass, $connection)
     {
         $connection = $connection !== null ? Db::connection($connection) : Db::connection();
         $query = (new self($connection))->from($modelClass::table());
+        /** @psalm-suppress UndefinedPropertyAssignment */
         $query->modelClass = $modelClass;
         return $query;
     }
@@ -24,7 +29,8 @@ class ModelQuery extends QueryBuilder
 	/**
 	 * Fetch first model
      *
-	 * @return Model|null
+     * @psalm-suppress LessSpecificImplementedReturnType
+	 * @return ?T
 	 */
 	public function fetchOne()
     {
@@ -39,8 +45,7 @@ class ModelQuery extends QueryBuilder
 	/**
 	 * Fetch all models as list
 	 *
-	 * @param string $sql
-	 * @return Model[]
+	 * @return T[]
 	 */
 	public function fetchAll()
     {
@@ -66,7 +71,7 @@ class ModelQuery extends QueryBuilder
 
     /**
      * Find one by primary key
-     * @return Model|null
+     * @return ?T
      */
     public function find($id)
     {
@@ -79,7 +84,7 @@ class ModelQuery extends QueryBuilder
     }
 
     /**
-     * @return Model
+     * @return T
      */
     private function instanceModel($data)
     {

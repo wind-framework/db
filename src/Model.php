@@ -12,11 +12,15 @@ use Wind\Event\EventDispatcher;
 /**
  * Database Model
  */
-class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
+abstract class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
 {
 
+    /** @var string|null */
     const CONNECTION = null;
+
+    /** @var string|null */
     const TABLE = null;
+
     const PRIMARY_KEY = 'id';
 
     /**
@@ -71,6 +75,10 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
         return array_merge($this->attributes, $this->dirtyAttributes);
     }
 
+    /**
+     * Start a model query
+     * @return ModelQuery<static>
+     */
     public static function query()
     {
         return ModelQuery::create(static::class, static::CONNECTION);
@@ -92,7 +100,7 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
 
     /**
      * Find one by primary key
-     * @return static|null
+     * @return ?static
      */
     public static function find($id)
     {

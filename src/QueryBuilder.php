@@ -17,7 +17,7 @@ namespace Wind\Db;
  *     alias?: string,
  *     join?: TJoin[],
  *     union?: string,
- *     where?: string|array<array-key, string|array>,
+ *     where?: string|array<array-key, scalar|array>,
  *     where_params?: array,
  *     limit?: int,
  *     offset?: int,
@@ -143,7 +143,7 @@ class QueryBuilder {
 	/**
 	 * Set where conditions.
 	 *
-	 * @param array<string, string|array>|string $cond Complex where condition array or string.
+	 * @param array<array-key, scalar|array>|string $cond Complex where condition array or string.
 	 *
 	 * Simple condition:
 	 * ['id'=>100]
@@ -830,7 +830,7 @@ class QueryBuilder {
 	 * @param string $cmd Insert command, INSERT or REPLACE
 	 * @param string $mode Insert mode, INTO or IGNORE
 	 * @param string $after Append sql
-	 * @return int Last insert id
+	 * @return ?int Last insert id
 	 */
 	private function insertCommand(array $data, $cmd='INSERT', $mode='INTO', $after=null)
 	{
@@ -858,6 +858,7 @@ class QueryBuilder {
             .$this->buildLimit().$this->buildOffset();
         $this->builder = [];
         $result = $this->connection->execute($sql);
+        /** @psalm-suppress NullableReturnStatement */
         return $result->getRowCount();
 	}
 
@@ -879,6 +880,7 @@ class QueryBuilder {
 		$this->builder = [];
 
         $result = $this->connection->execute($sql);
+        /** @psalm-suppress NullableReturnStatement */
         return $result->getRowCount();
 	}
 

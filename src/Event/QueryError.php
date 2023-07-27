@@ -13,7 +13,7 @@ class QueryError extends \Wind\Event\Event
     /**
      * QueryError constructor.
      * @param string $sql
-     * @param \Exception $exception
+     * @param \Exception|\Error $exception
      */
     public function __construct($sql, $exception)
     {

@@ -3,13 +3,11 @@
 namespace Wind\Db;
 
 use Amp\Mysql\MysqlResult;
-use Amp\Mysql\Result;
 use Amp\Sql\ConnectionException;
-use Amp\Sql\FailureException;
-use Amp\Sql\QueryError as SqlQueryError;
+use Amp\Sql\QueryError;
 use Amp\Sql\SqlException;
 use Psr\EventDispatcher\EventDispatcherInterface;
-use Wind\Db\Event\QueryError;
+use Wind\Db\Event\QueryError as QueryErrorEvent;
 use Wind\Db\Event\QueryEvent;
 
 abstract class Executor
@@ -25,7 +23,7 @@ abstract class Executor
     /**
      * Set fetchAll() return array index is used by special result key
      *
-     * @var string
+     * @var string|null
      */
     protected $indexBy;
 
@@ -62,7 +60,7 @@ abstract class Executor
      * @param string $sql
      * @param array $params
      * @throws QueryException
-     * @throws \Amp\Sql\QueryError
+     * @throws QueryError
      */
 	public function query(string $sql, array $params=[]): MysqlResult
 	{
@@ -81,8 +79,8 @@ abstract class Executor
                     return $this->conn->query($sql);
                 }
             }
-        } catch (ConnectionException|SqlException|SqlQueryError $e) {
-            $eventDispatcher->dispatch(new QueryError($sql, $e));
+        } catch (ConnectionException|SqlException|QueryError $e) {
+            $eventDispatcher->dispatch(new QueryErrorEvent($sql, $e));
             throw new QueryException($e->getMessage(), $e->getCode(), $sql);
         }
 	}
@@ -91,7 +89,7 @@ abstract class Executor
 	 * @param string $sql
 	 * @param array $params
 	 * @throws QueryException
-     * @throws \Amp\Sql\QueryError
+     * @throws QueryError
 	 */
 	public function execute(string $sql, array $params = []): MysqlResult
 	{
@@ -100,8 +98,8 @@ abstract class Executor
 
         try {
             return $this->conn->execute($sql, $params);
-        } catch (ConnectionException|SqlException|SqlQueryError $e) {
-            $eventDispatcher->dispatch(new QueryError($sql, $e));
+        } catch (ConnectionException|SqlException|QueryError $e) {
+            $eventDispatcher->dispatch(new QueryErrorEvent($sql, $e));
             throw new QueryException($e->getMessage(), $e->getCode(), $sql);
         }
 	}
@@ -167,7 +165,7 @@ abstract class Executor
      *
      * @param $sql
      * @param array $params
-     * @param int $col
+     * @param int|string $col
      * @return array
      */
     public function fetchColumn($sql, array $params=[], $col=0): array {
