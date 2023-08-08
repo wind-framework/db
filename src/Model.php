@@ -2,22 +2,39 @@
 
 namespace Wind\Db;
 
-use ArrayAccess;
-use ArrayIterator;
-use IteratorAggregate;
-use JsonSerializable;
-use Traversable;
-use Wind\Event\EventDispatcher;
+use Wind\Utils\PhpUtil;
 
 /**
  * Database Model
+ *
+ * @psalm-type EventName = "retrieved"|"beforeCreate"|"created"|"beforeUpdate"|"updated"|"beforeSave"|"saved"|"beforeDelete"|"deleted"
  */
-class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
+abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializable
 {
 
-    const CONNECTION = null;
-    const TABLE = null;
-    const PRIMARY_KEY = 'id';
+    /** @var string|null */
+    protected $connection = null;
+
+    /** @var string */
+    protected $table;
+
+    /** @var string */
+    protected $primaryKey = 'id';
+
+    const EVENT_RETRIEVED = 'retrieved';
+    const EVENT_BEFORE_CREATE = 'beforeCreate';
+    const EVENT_CREATED = 'created';
+    const EVENT_BEFORE_UPDATE = 'beforeUpdate';
+    const EVENT_UPDATED = 'updated';
+    const EVENT_BEFORE_SAVE = 'beforeSave';
+    const EVENT_SAVED = 'saved';
+    const EVENT_BEFORE_DELETE = 'beforeDelete';
+    const EVENT_DELETED = 'deleted';
+
+    /** Global event callbacks */
+    private static $eventCallbacks = [];
+
+    protected static $booted = false;
 
     /**
      * Dirty attributes are fields that have been changed but not saved to database
@@ -31,8 +48,6 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
      */
     private $changedAttributes = [];
 
-    private EventDispatcher $eventDispatcher;
-
     /**
      * @param array $attributes All fields queried from or saved into the database
      */
@@ -40,7 +55,38 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
         public array $attributes=[],
         private bool $isNew=true
     )
+    {
+        if (!static::$booted) {
+            static::$booted = true;
+
+            // boot model
+            static::boot();
+
+            // boot traits
+            self::bootTraits();
+        }
+    }
+
+    /**
+     * Boot when model first initialized
+     */
+    protected static function boot()
     {}
+
+    private static function bootTraits()
+    {
+        $traits = PhpUtil::getTraits(static::class);
+
+        print_r($traits);
+
+        foreach ($traits as $trait) {
+            $method = 'boot'.basename(str_replace('\\', '/', $trait));
+            echo $trait.'::'.$method."\n";
+            if (method_exists($trait, $method)) {
+                static::$method();
+            }
+        }
+    }
 
     public function offsetExists($name): bool {
         return isset($this->attributes[$name]) || isset($this->dirtyAttributes[$name]);
@@ -58,8 +104,8 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
         $this->__set($name, null);
     }
 
-    public function getIterator(): Traversable {
-        return new ArrayIterator($this->getAttributes());
+    public function getIterator(): \Traversable {
+        return new \ArrayIterator($this->getAttributes());
     }
 
     public function jsonSerialize(): array {
@@ -73,12 +119,12 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
 
     public static function query()
     {
-        return ModelQuery::create(static::class, static::CONNECTION);
+        return ModelQuery::create(static::class, self::property('connection'));
     }
 
     public static function table()
     {
-        return static::TABLE ?: self::uncamelize(substr(strrchr(static::class, '\\'), 1));
+        return self::property('table') ?: self::uncamelize(substr(strrchr(static::class, '\\'), 1));
     }
 
     /**
@@ -87,7 +133,8 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
      */
     public static function connection()
     {
-        return static::CONNECTION !== null ? Db::connection(static::CONNECTION) : Db::connection();
+        $connection = self::property('connection');
+        return $connection !== null ? Db::connection($connection) : Db::connection();
     }
 
     /**
@@ -97,6 +144,22 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
     public static function find($id)
     {
         return static::query()->find($id);
+    }
+
+    /**
+     * Get default property value of current model outside the instance
+     *
+     * @param string $name
+     * @return mixed null if property not exists
+     */
+    protected static function property($name)
+    {
+        $ref = new \ReflectionClass(static::class);
+        if ($ref->hasProperty($name)) {
+            return $ref->getProperty($name)->getDefaultValue();
+        } else {
+            return null;
+        }
     }
 
     /**
@@ -144,8 +207,8 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
 
     private function locate()
     {
-        if (static::PRIMARY_KEY && isset($this->{static::PRIMARY_KEY})) {
-            $condition = [static::PRIMARY_KEY=>$this->{static::PRIMARY_KEY}];
+        if ($this->primaryKey && isset($this->{$this->primaryKey})) {
+            $condition = [$this->primaryKey=>$this->{$this->primaryKey}];
             return static::query()->where($condition);
         } else {
             throw new DbException('No primary key for '.static::class.' to operate.');
@@ -189,21 +252,21 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
             }
         }
 
-        $this->dispatchEvent('afterSave', $this->isNew);
+        $this->dispatchEvent('saved', $this->isNew);
     }
 
     public function insert()
     {
-        $this->dispatchEvent('beforeInsert', $this->isNew);
+        $this->dispatchEvent('beforeCreate', $this->isNew);
 
         $id = self::query()->insert($this->getAttributes());
         if ($id) {
-            $this->attributes[static::PRIMARY_KEY] = $id;
+            $this->attributes[$this->primaryKey] = $id;
         }
 
         $this->mergeAttributeChanges();
 
-        $this->dispatchEvent('afterInsert', $this->isNew);
+        $this->dispatchEvent('created', $this->isNew);
 
         return $id;
     }
@@ -216,7 +279,7 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
             $this->locate()->update($this->dirtyAttributes);
             $this->mergeAttributeChanges();
 
-            $this->dispatchEvent('afterUpdate');
+            $this->dispatchEvent('updated');
 
             return true;
         } else {
@@ -228,7 +291,7 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
     {
         $this->dispatchEvent('beforeDelete');
         if ($this->locate()->delete() > 0) {
-            $this->dispatchEvent('afterDelete');
+            $this->dispatchEvent('deleted');
         }
     }
 
@@ -252,7 +315,14 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
 
         //在触发 updateCounters 的 beforeUpdate 事件时，dirtyAttributes 是包含 ModelCounter 实例字段的
         $this->dirtyAttributes = $update;
+
         $this->dispatchEvent('beforeUpdate');
+
+        //beforeUpdate 事件可能会更改 dirtyAttributes 的值
+        //此处只接受来自事件的更新，所以不会在 beforeUpdate 前直接将 dirtyAttributes 与 $update 合并
+        if ($this->dirtyAttributes !== $update) {
+            $update = $this->dirtyAttributes;
+        }
 
         $affected = $this->locate()->update($update);
 
@@ -271,7 +341,7 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
                 }
             }
 
-            $this->dispatchEvent('afterUpdate');
+            $this->dispatchEvent('updated');
         }
 
         return $affected;
@@ -287,33 +357,121 @@ class Model implements ArrayAccess, IteratorAggregate, JsonSerializable
         return $this->updateCounters([$name=>-$value], $withAttributes);
     }
 
-    protected function dispatchEvent($name, ...$args)
+    /**
+     * Dispatch model event
+     *
+     * @param string $name Event name
+     * @psalm-param EventName $name Event name
+     * @param array $args Event arguments
+     */
+    public function dispatchEvent($name, ...$args)
     {
         $this->$name(...$args);
+
+        $index = static::class.':'.$name;
+
+        if (isset(self::$eventCallbacks[$index])) {
+            foreach (self::$eventCallbacks[$index] as $callback) {
+                $callback($this, ...$args);
+            }
+        }
     }
 
-    public function beforeInsert()
+    /**
+     * Add callback to event
+     *
+     * @param string $name Event name
+     * @psalm-param EventName $name
+     * @param callable $callback
+     */
+    public static function on($name, $callback)
+    {
+        $index = static::class.':'.$name;
+        self::$eventCallbacks[$index] ??= [];
+        self::$eventCallbacks[$index][] = $callback;
+        print_r(self::$eventCallbacks);
+    }
+
+    /**
+     * Off the callback on event
+     *
+     * @param string $name Event name
+     * @psalm-param EventName $name
+     * @param ?callable $callback
+     */
+    public static function off($name, $callback=null)
+    {
+        $index = static::class.':'.$name;
+
+        if (!isset(self::$eventCallbacks[$index])) {
+            return;
+        }
+
+        if ($callback === null) {
+            unset(self::$eventCallbacks[$index]);
+        } elseif (in_array($callback, self::$eventCallbacks[$index], true)) {
+            $i = array_search($callback, self::$eventCallbacks[$index], true);
+            unset(self::$eventCallbacks[$index][$i]);
+            if (count(self::$eventCallbacks[$index]) == 0) {
+                unset(self::$eventCallbacks[$index]);
+            }
+        }
+    }
+
+    /**
+     * After item retrieved
+     */
+    protected function retrieved()
     {}
 
-    public function afterInsert()
+    /**
+     * Before insert event
+     */
+    protected function beforeCreate()
     {}
 
-    public function beforeUpdate()
+    /**
+     * After insert event
+     */
+    protected function created()
     {}
 
-    public function afterUpdate()
+    /**
+     * Before update event
+     */
+    protected function beforeUpdate()
     {}
 
-    public function beforeSave()
+    /**
+     * After update event
+     */
+    protected function updated()
     {}
 
-    public function afterSave()
+    /**
+     * Before save event
+     * @param bool $isNew
+     */
+    protected function beforeSave($isNew)
     {}
 
-    public function beforeDelete()
+    /**
+     * After save event
+     * @param bool $isNew
+     */
+    protected function saved($isNew)
     {}
 
-    public function afterDelete()
+    /**
+     * Before delete event
+     */
+    protected function beforeDelete()
+    {}
+
+    /**
+     * Before delete event
+     */
+    protected function deleted()
     {}
 
 }
