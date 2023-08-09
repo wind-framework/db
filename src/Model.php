@@ -69,6 +69,7 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
         }
 
         $this->dispatchEvent(self::EVENT_INIT);
+        !$isNew && $this->dispatchEvent(self::EVENT_RETRIEVED);
     }
 
     /**
@@ -127,7 +128,7 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
 
     public static function query()
     {
-        return ModelQuery::create(static::class, self::property('connection'));
+        return ModelQuery::create(static::class);
     }
 
     public static function table()
@@ -334,11 +335,11 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
 
         $affected = $this->locate()->update($update);
 
-        if ($affected > 0) {
-            //在合并进 attributes 和 changedAttributes 时，不能把 ModelCounter 实例合并进去，因为这并不是真正的值
-            $this->dirtyAttributes = $withAttributes;
-            $this->mergeAttributeChanges();
+        //在合并进 attributes 和 changedAttributes 时，不能把 ModelCounter 实例合并进去，因为这并不是真正的值
+        $this->dirtyAttributes = array_filter($this->dirtyAttributes, fn($value) => !$value instanceof ModelCounter);
+        $this->mergeAttributeChanges();
 
+        if ($affected > 0) {
             //在合并完值之后，如果模型原本存在 counters 中的字段，则对模型该属性递增或递减，确保在后续能获取到变化的值，
             //但是注意，这里递增和递减后的值仅用于表达有变化的一种预估，由于可能存在并发原因，并不能代表真实数据库中的更新后的值。
             //如果模型属性中原本就没有查出该字段，则 updateCounters 之后仍不会有该字段，因为除非查询一次，否则无法得知任何预估的值。
@@ -372,7 +373,7 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
      * @psalm-param EventName $name Event name
      * @param array $args Event arguments
      */
-    public function dispatchEvent($name, ...$args)
+    private function dispatchEvent($name, ...$args)
     {
         $index = static::class.':'.$name;
 

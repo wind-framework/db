@@ -13,10 +13,11 @@ class ModelQuery extends QueryBuilder
     /**
      * @return self
      */
-    public static function create($modelClass, $connection)
+    public static function create($modelClass)
     {
-        $connection = $connection !== null ? Db::connection($connection) : Db::connection();
-        $query = (new self($connection))->from($modelClass::table());
+        $connection = $modelClass::connection();
+        $table = $modelClass::table();
+        $query = (new self($connection))->from($table);
         $query->modelClass = $modelClass;
         return $query;
     }
@@ -39,7 +40,6 @@ class ModelQuery extends QueryBuilder
 	/**
 	 * Fetch all models as list
 	 *
-	 * @param string $sql
 	 * @return Model[]
 	 */
 	public function fetchAll()
@@ -85,9 +85,7 @@ class ModelQuery extends QueryBuilder
     private function instanceModel($data)
     {
         $ref = new \ReflectionClass($this->modelClass);
-        $model = $ref->newInstance($data, false);
-        $model->dispatchEvent(Model::EVENT_RETRIEVED);
-        return $model;
+        return $ref->newInstance($data, false);
     }
 
 	/**
