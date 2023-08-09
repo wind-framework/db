@@ -160,7 +160,7 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
      * @param string $name
      * @return mixed null if property not exists
      */
-    protected static function property($name)
+    public static function property($name)
     {
         $ref = new \ReflectionClass(static::class);
         if ($ref->hasProperty($name)) {

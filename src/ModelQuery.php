@@ -70,8 +70,9 @@ class ModelQuery extends QueryBuilder
      */
     public function find($id)
     {
-        if ($this->modelClass::PRIMARY_KEY) {
-            $condition = [$this->modelClass::PRIMARY_KEY=>$id];
+        $primaryKey = $this->modelClass::property('primaryKey');
+        if ($primaryKey) {
+            $condition = [$primaryKey=>$id];
             return $this->where($condition)->fetchOne();
         } else {
             throw new DbException('No primary key for '.$this->modelClass.' to find.');
