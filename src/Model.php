@@ -7,20 +7,12 @@ use Wind\Utils\PhpUtil;
 /**
  * Database Model
  *
- * @psalm-type EventName = "retrieved"|"beforeCreate"|"created"|"beforeUpdate"|"updated"|"beforeSave"|"saved"|"beforeDelete"|"deleted"
+ * @psalm-type EventName = "init"|"retrieved"|"beforeCreate"|"created"|"beforeUpdate"|"updated"|"beforeSave"|"saved"|"beforeDelete"|"deleted"
  */
 abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializable
 {
 
-    /** @var string|null */
-    protected $connection = null;
-
-    /** @var string */
-    protected $table;
-
-    /** @var string */
-    protected $primaryKey = 'id';
-
+    const EVENT_INIT = 'init';
     const EVENT_RETRIEVED = 'retrieved';
     const EVENT_BEFORE_CREATE = 'beforeCreate';
     const EVENT_CREATED = 'created';
@@ -34,7 +26,17 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
     /** Global event callbacks */
     private static $eventCallbacks = [];
 
-    protected static $booted = false;
+    /** Booted traits */
+    private static $booted = [];
+
+    /** @var string|null */
+    protected $connection = null;
+
+    /** @var string */
+    protected $table;
+
+    /** @var string */
+    protected $primaryKey = 'id';
 
     /**
      * Dirty attributes are fields that have been changed but not saved to database
@@ -56,15 +58,17 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
         private bool $isNew=true
     )
     {
-        if (!static::$booted) {
-            static::$booted = true;
-
-            // boot model
-            static::boot();
+        if (!isset(self::$booted[static::class])) {
+            self::$booted[static::class] = true;
 
             // boot traits
             self::bootTraits();
+
+            // boot model
+            static::boot();
         }
+
+        $this->dispatchEvent(self::EVENT_INIT);
     }
 
     /**
@@ -77,13 +81,17 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
     {
         $traits = PhpUtil::getTraits(static::class);
 
-        print_r($traits);
-
         foreach ($traits as $trait) {
-            $method = 'boot'.basename(str_replace('\\', '/', $trait));
-            echo $trait.'::'.$method."\n";
+            $baseName = basename(str_replace('\\', '/', $trait));
+
+            $method = 'boot'.$baseName;
             if (method_exists($trait, $method)) {
                 static::$method();
+            }
+
+            $method = 'init'.$baseName;
+            if (method_exists($trait, $method)) {
+                static::on(self::EVENT_INIT, static fn($model) => $model->$method());
             }
         }
     }
@@ -242,7 +250,7 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
 
     public function save()
     {
-        $this->dispatchEvent('beforeSave', $this->isNew);
+        $this->dispatchEvent(self::EVENT_BEFORE_SAVE, $this->isNew);
 
         if ($this->isNew) {
             $this->insert();
@@ -252,12 +260,12 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
             }
         }
 
-        $this->dispatchEvent('saved', $this->isNew);
+        $this->dispatchEvent(self::EVENT_SAVED, $this->isNew);
     }
 
     public function insert()
     {
-        $this->dispatchEvent('beforeCreate', $this->isNew);
+        $this->dispatchEvent(self::EVENT_BEFORE_CREATE);
 
         $id = self::query()->insert($this->getAttributes());
         if ($id) {
@@ -266,20 +274,20 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
 
         $this->mergeAttributeChanges();
 
-        $this->dispatchEvent('created', $this->isNew);
+        $this->dispatchEvent(self::EVENT_CREATED);
 
         return $id;
     }
 
     public function update()
     {
-        $this->dispatchEvent('beforeUpdate');
+        $this->dispatchEvent(self::EVENT_BEFORE_UPDATE);
 
         if ($this->dirtyAttributes) {
             $this->locate()->update($this->dirtyAttributes);
             $this->mergeAttributeChanges();
 
-            $this->dispatchEvent('updated');
+            $this->dispatchEvent(self::EVENT_UPDATED);
 
             return true;
         } else {
@@ -289,9 +297,9 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
 
     public function delete()
     {
-        $this->dispatchEvent('beforeDelete');
+        $this->dispatchEvent(self::EVENT_BEFORE_DELETE);
         if ($this->locate()->delete() > 0) {
-            $this->dispatchEvent('deleted');
+            $this->dispatchEvent(self::EVENT_DELETED);
         }
     }
 
@@ -316,7 +324,7 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
         //在触发 updateCounters 的 beforeUpdate 事件时，dirtyAttributes 是包含 ModelCounter 实例字段的
         $this->dirtyAttributes = $update;
 
-        $this->dispatchEvent('beforeUpdate');
+        $this->dispatchEvent(self::EVENT_BEFORE_UPDATE);
 
         //beforeUpdate 事件可能会更改 dirtyAttributes 的值
         //此处只接受来自事件的更新，所以不会在 beforeUpdate 前直接将 dirtyAttributes 与 $update 合并
@@ -341,7 +349,7 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
                 }
             }
 
-            $this->dispatchEvent('updated');
+            $this->dispatchEvent(self::EVENT_UPDATED);
         }
 
         return $affected;
@@ -366,8 +374,6 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
      */
     public function dispatchEvent($name, ...$args)
     {
-        $this->$name(...$args);
-
         $index = static::class.':'.$name;
 
         if (isset(self::$eventCallbacks[$index])) {
@@ -375,6 +381,8 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
                 $callback($this, ...$args);
             }
         }
+
+        $this->$name(...$args);
     }
 
     /**
@@ -389,7 +397,6 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
         $index = static::class.':'.$name;
         self::$eventCallbacks[$index] ??= [];
         self::$eventCallbacks[$index][] = $callback;
-        print_r(self::$eventCallbacks);
     }
 
     /**
@@ -417,6 +424,12 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
             }
         }
     }
+
+    /**
+     * Init when instance created
+     */
+    protected function init()
+    {}
 
     /**
      * After item retrieved

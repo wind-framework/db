@@ -85,7 +85,7 @@ class ModelQuery extends QueryBuilder
     {
         $ref = new \ReflectionClass($this->modelClass);
         $model = $ref->newInstance($data, false);
-        $model->dispatchEvent('retrieved');
+        $model->dispatchEvent(Model::EVENT_RETRIEVED);
         return $model;
     }
 
