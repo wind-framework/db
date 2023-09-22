@@ -25,7 +25,7 @@ abstract class Executor
     /**
      * Set fetchAll() return array index is used by special result key
      *
-     * @var string
+     * @var string|null
      */
     protected $indexBy;
 
@@ -165,9 +165,9 @@ abstract class Executor
     /**
      * Fetch column from all rows
      *
-     * @param $sql
+     * @param string $sql
      * @param array $params
-     * @param int $col
+     * @param int|string $col
      * @return array
      */
     public function fetchColumn($sql, array $params=[], $col=0): array {

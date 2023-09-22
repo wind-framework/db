@@ -928,7 +928,7 @@ class QueryBuilder {
     /**
      * Fetch column from all rows
      *
-     * @param int $col
+     * @param int|string $col
      */
     public function fetchColumn($col=0): array {
         $sql = $this->buildSelect();

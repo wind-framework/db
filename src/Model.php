@@ -251,9 +251,10 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
 
     public function save()
     {
-        $this->dispatchEvent(self::EVENT_BEFORE_SAVE, $this->isNew);
+        $isNew = $this->isNew;
+        $this->dispatchEvent(self::EVENT_BEFORE_SAVE, $isNew);
 
-        if ($this->isNew) {
+        if ($isNew) {
             $this->insert();
         } else {
             if ($this->dirtyAttributes) {
@@ -261,7 +262,7 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
             }
         }
 
-        $this->dispatchEvent(self::EVENT_SAVED, $this->isNew);
+        $this->dispatchEvent(self::EVENT_SAVED, $isNew);
     }
 
     public function insert()
@@ -276,6 +277,8 @@ abstract class Model implements \ArrayAccess, \IteratorAggregate, \JsonSerializa
         $this->mergeAttributeChanges();
 
         $this->dispatchEvent(self::EVENT_CREATED);
+
+        $this->isNew = false;
 
         return $id;
     }
