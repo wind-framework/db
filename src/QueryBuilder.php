@@ -24,7 +24,7 @@ namespace Wind\Db;
  *     index_by?: string,
  *     having?: string|array<array-key, string|array>,
  *     group_by?: string|string[],
- *     order_by?: string|array<string, 3|4|string>
+ *     order_by?: string|array<string, 3|4|string>|Expression
  * }
  */
 class QueryBuilder {
@@ -204,7 +204,7 @@ class QueryBuilder {
 	/**
      * Sort the result
      *
-	 * @param array<string, 3|4|string>|string $order Key is field name, value is constant of SORT_ASC, SORT_DESC or string 'asc', 'desc'
+	 * @param array<string, 3|4|string>|string|Expression $order Key is field name, value is constant of SORT_ASC, SORT_DESC or string 'asc', 'desc'
 	 */
 	public function orderBy($order): static
 	{
@@ -402,33 +402,36 @@ class QueryBuilder {
 		if (isset($this->builder['order_by'])) {
 			$orderBy = $this->builder['order_by'];
 
-			//convert order by string to array
-			if (!is_array($orderBy)) {
-				$orderBy = preg_replace('/\s+/', ' ', $orderBy);
-				$arr = array_map('trim', explode(',', $orderBy));
-				$orderBy = [];
+            if (!$orderBy instanceof Expression) {
+                //convert order by string to array
+                if (!is_array($orderBy)) {
+                    $arr = array_map('trim', explode(',', preg_replace('/\s+/', ' ', $orderBy)));
+                    $orderBy = [];
 
-				foreach ($arr as $ostr) {
-					list($field, $sort) = explode(' ', $ostr);
-					$orderBy[$field] = $sort;
-				}
-			}
+                    foreach ($arr as $ostr) {
+                        [$field, $sort] = explode(' ', $ostr);
+                        $orderBy[$field] = $sort;
+                    }
+                }
 
-			$order = '';
+                $order = '';
 
-			foreach ($orderBy as $field => $sort) {
-				$order != '' && $order .= ', ';
+                foreach ($orderBy as $field => $sort) {
+                    $order != '' && $order .= ', ';
 
-				if ($sort === SORT_ASC) {
-					$sort = 'ASC';
-				} elseif ($sort === SORT_DESC) {
-					$sort = 'DESC';
-				} else {
-					$sort = strtoupper($sort);
-				}
+                    if ($sort === SORT_ASC) {
+                        $sort = 'ASC';
+                    } elseif ($sort === SORT_DESC) {
+                        $sort = 'DESC';
+                    } else {
+                        $sort = strtoupper($sort);
+                    }
 
-				$order .= $this->quoteKeys($field).' '.$sort;
-			}
+                    $order .= $this->quoteKeys($field).' '.$sort;
+                }
+            } else {
+                $order = (string)$orderBy;
+            }
 
 			$sql .= ' ORDER BY '.$order;
 		}
