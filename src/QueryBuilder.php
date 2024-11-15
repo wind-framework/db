@@ -124,7 +124,7 @@ class QueryBuilder {
 	}
 
 	/**
-	 * @param array|string $order
+	 * @param array|string|Expression $order
 	 * @return static
 	 */
 	public function orderBy($order)
@@ -228,7 +228,7 @@ class QueryBuilder {
 		if (isset($this->builder['join'])) {
 			$sql = '';
 			foreach ($this->builder['join'] as $join) {
-				$sql .= ' '.$join['type'].' JOIN '.$this->quoteTable($this->builder['alias'] ? $join['table'].' '.$join['alias'] : $join['table']);
+				$sql .= ' '.$join['type'].' JOIN '.$this->quoteTable($join['alias'] ? $join['table'].' '.$join['alias'] : $join['table']);
 				//only a field mean USING()
 				if (is_string($join['compopr']) && preg_match('/^[^\(\)\=]+$/', $join['compopr'])) {
 					$sql .= ' USING('.$this->quoteKeys($join['compopr'], true).')';
@@ -307,33 +307,37 @@ class QueryBuilder {
 		if (isset($this->builder['order_by'])) {
 			$orderBy = $this->builder['order_by'];
 
-			//convert order by string to array
-			if (!is_array($orderBy)) {
-				$orderBy = preg_replace('/\s+/', ' ', $orderBy);
-				$arr = array_map('trim', explode(',', $orderBy));
-				$orderBy = [];
+            if (!$orderBy instanceof Expression) {
+                //convert order by string to array
+                if (!is_array($orderBy)) {
+                    $orderBy = preg_replace('/\s+/', ' ', $orderBy);
+                    $arr = array_map('trim', explode(',', $orderBy));
+                    $orderBy = [];
 
-				foreach ($arr as $ostr) {
-					list($field, $sort) = explode(' ', $ostr);
-					$orderBy[$field] = $sort;
-				}
-			}
+                    foreach ($arr as $ostr) {
+                        list($field, $sort) = explode(' ', $ostr);
+                        $orderBy[$field] = $sort;
+                    }
+                }
 
-			$order = '';
+                $order = '';
 
-			foreach ($orderBy as $field => $sort) {
-				$order != '' && $order .= ', ';
+                foreach ($orderBy as $field => $sort) {
+                    $order != '' && $order .= ', ';
 
-				if ($sort === SORT_ASC) {
-					$sort = 'ASC';
-				} elseif ($sort === SORT_DESC) {
-					$sort = 'DESC';
-				} else {
-					$sort = strtoupper($sort);
-				}
+                    if ($sort === SORT_ASC) {
+                        $sort = 'ASC';
+                    } elseif ($sort === SORT_DESC) {
+                        $sort = 'DESC';
+                    } else {
+                        $sort = strtoupper($sort);
+                    }
 
-				$order .= $this->quoteKeys($field).' '.$sort;
-			}
+                    $order .= $this->quoteKeys($field).' '.$sort;
+                }
+            } else {
+                $order = (string)$orderBy;
+            }
 
 			$sql .= ' ORDER BY '.$order;
 		}
@@ -808,8 +812,6 @@ class QueryBuilder {
 	/**
 	 * 查询一条数据出来
 	 *
-	 * @param string $sql
-	 * @param array $params
 	 * @return Promise<array>
 	 */
 	public function fetchOne(): Promise {

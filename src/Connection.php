@@ -18,13 +18,6 @@ class Connection extends Executor
 	private $name;
     private $type;
 
-    /**
-     * Connection Pool
-     *
-     * @var \Amp\Sql\Common\ConnectionPool
-     */
-    protected $conn;
-
 	public function __construct($name) {
         $config = di()->get(Config::class)->get('database.'.$name);
 

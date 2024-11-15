@@ -30,7 +30,7 @@ abstract class Executor
     protected $indexBy;
 
     /**
-     * Database Executor
+     * Database Executor & Connection Pool
      *
      * @var \Amp\Sql\Executor
      */
